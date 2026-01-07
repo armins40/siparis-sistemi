@@ -24,75 +24,109 @@ export default function ProductsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string>('')
+  const [apiProducts, setApiProducts] = useState<any[]>([])
 
   useEffect(() => {
     // Check authentication client-side only (SSR-safe)
     if (typeof window === 'undefined') return
 
-    // Read "siparisUser" from localStorage
-    const userStr = localStorage.getItem('siparisUser')
-    
-    // If not exists OR isLoggedIn !== true → redirect to /login
-    if (!userStr) {
-      router.push('/login')
-      return
-    }
-
-    try {
-      const siparisUser = JSON.parse(userStr)
-      if (!siparisUser || siparisUser.isLoggedIn !== true) {
+    async function loadData() {
+      // Read "siparisUser" from localStorage
+      const userStr = localStorage.getItem('siparisUser')
+      
+      // If not exists OR isLoggedIn !== true → redirect to /login
+      if (!userStr) {
         router.push('/login')
         return
       }
 
-      // Get business name and generate store slug
-      const userInfo = auth.getUserInfo()
-      if (userInfo) {
-        setBusinessName(userInfo.businessName)
-        const slug = generateSlug(userInfo.businessName)
-        setStoreSlug(slug)
-        
-        // Load product settings from siparisProducts_{storeSlug}
-        const productDataKey = `siparisProducts_${slug}`
-        const productDataStr = localStorage.getItem(productDataKey)
-        if (productDataStr) {
-          try {
-            const settings = JSON.parse(productDataStr) as Record<string, ProductSettings>
-            setProductSettingsMap(settings)
-          } catch {
-            // Invalid data, start with empty
-            setProductSettingsMap({})
+      try {
+        const siparisUser = JSON.parse(userStr)
+        if (!siparisUser || siparisUser.isLoggedIn !== true) {
+          router.push('/login')
+          return
+        }
+
+        // Get business name and generate store slug
+        const userInfo = auth.getUserInfo()
+        if (userInfo) {
+          setBusinessName(userInfo.businessName)
+          const slug = generateSlug(userInfo.businessName)
+          setStoreSlug(slug)
+          
+          // Load product settings from siparisProducts_{storeSlug}
+          const productDataKey = `siparisProducts_${slug}`
+          const productDataStr = localStorage.getItem(productDataKey)
+          if (productDataStr) {
+            try {
+              const settings = JSON.parse(productDataStr) as Record<string, ProductSettings>
+              setProductSettingsMap(settings)
+            } catch {
+              // Invalid data, start with empty
+              setProductSettingsMap({})
+            }
           }
         }
-      }
 
-      // Load business types from dashboard data
-      const savedData = localStorage.getItem(DASHBOARD_DATA_KEY)
-      if (savedData) {
+        // Load current products from API
         try {
-          const data = JSON.parse(savedData) as DashboardData
-          const types = data.businessTypes || []
-          setBusinessTypes(types)
-        } catch {
-          // Ignore parse errors
+          const apiResponse = await fetch('/api/products')
+          if (apiResponse.ok) {
+            const apiData = await apiResponse.json()
+            if (Array.isArray(apiData)) {
+              setApiProducts(apiData)
+              
+              // Sync API products with settings map (if they exist in catalog)
+              const updatedSettings = { ...productSettingsMap }
+              apiData.forEach((apiProduct: any) => {
+                // Check if this API product matches a catalog product
+                const catalogProduct = PRODUCT_CATALOG.find(p => String(p.id) === String(apiProduct.id))
+                if (catalogProduct) {
+                  // Update settings from API product
+                  updatedSettings[catalogProduct.id] = {
+                    price: typeof apiProduct.price === 'number' ? apiProduct.price : null,
+                    active: true,
+                    outOfStock: apiProduct.stock === 0
+                  }
+                }
+              })
+              setProductSettingsMap(updatedSettings)
+            }
+          }
+        } catch (error) {
+          console.error('[Products Page] Error loading from API:', error)
         }
+
+        // Load business types from dashboard data
+        const savedData = localStorage.getItem(DASHBOARD_DATA_KEY)
+        if (savedData) {
+          try {
+            const data = JSON.parse(savedData) as DashboardData
+            const types = data.businessTypes || []
+            setBusinessTypes(types)
+          } catch {
+            // Ignore parse errors
+          }
+        }
+
+        // Expand all subcategories by default
+        const allSubcategories = new Set<string>()
+        PRODUCT_CATALOG.forEach(product => {
+          allSubcategories.add(`${product.parentCategory}-${product.subcategory}`)
+        })
+        const expanded: Record<string, boolean> = {}
+        allSubcategories.forEach(sub => {
+          expanded[sub] = true
+        })
+        setExpandedSubcategories(expanded)
+
+        setIsLoading(false)
+      } catch {
+        router.push('/login')
       }
-
-      // Expand all subcategories by default
-      const allSubcategories = new Set<string>()
-      PRODUCT_CATALOG.forEach(product => {
-        allSubcategories.add(`${product.parentCategory}-${product.subcategory}`)
-      })
-      const expanded: Record<string, boolean> = {}
-      allSubcategories.forEach(sub => {
-        expanded[sub] = true
-      })
-      setExpandedSubcategories(expanded)
-
-      setIsLoading(false)
-    } catch {
-      router.push('/login')
     }
+
+    loadData()
   }, [router])
 
   // Filter and group products by business type → subcategory
@@ -196,7 +230,9 @@ export default function ProductsPage() {
 
     // Build published products from current settings state
     const publishedProducts: any[] = []
+    const catalogProductIds = new Set<string>()
 
+    // Add active catalog products with settings
     PRODUCT_CATALOG.forEach(product => {
       const setting = productSettingsMap[product.id]
       
@@ -214,21 +250,36 @@ export default function ProductsPage() {
         id: String(product.id),
         name: product.name,
         price: setting.price,
-        category: product.subcategory || product.category || 'Diğer',
+        category: product.subcategory || 'Diğer',
         image: product.image || `https://via.placeholder.com/150?text=${encodeURIComponent(product.name)}`,
         unit: 'kg', // Default unit
         stock: setting.outOfStock ? 0 : 100 // Default stock
       }
       
       publishedProducts.push(publishedProduct)
+      catalogProductIds.add(String(product.id))
     })
 
-    if (publishedProducts.length === 0) {
-      alert("Aktif ürün yok veya fiyat girilmemiş")
-      return
+    // Preserve products from API that are NOT in catalog (admin-added products)
+    if (Array.isArray(apiProducts)) {
+      apiProducts.forEach((apiProduct: any) => {
+        const apiProductId = String(apiProduct.id || '')
+        // If this product is not in catalog, preserve it
+        if (!catalogProductIds.has(apiProductId) && apiProduct.name) {
+          publishedProducts.push({
+            id: apiProductId,
+            name: apiProduct.name,
+            price: typeof apiProduct.price === 'number' ? apiProduct.price : 0,
+            category: apiProduct.category || apiProduct.subcategory || 'Diğer',
+            image: apiProduct.image || `https://via.placeholder.com/150?text=${encodeURIComponent(apiProduct.name)}`,
+            unit: apiProduct.unit || 'item',
+            stock: typeof apiProduct.stock === 'number' ? apiProduct.stock : 100
+          })
+        }
+      })
     }
 
-    // POST to /api/products (replace all products)
+    // POST to /api/products (replace all products, but includes both catalog and admin products)
     try {
       const response = await fetch('/api/products', {
         method: 'POST',
@@ -241,6 +292,9 @@ export default function ProductsPage() {
       if (!response.ok) {
         throw new Error('Failed to publish products')
       }
+
+      // Update local API products state
+      setApiProducts(publishedProducts)
 
       alert(`Ürünler başarıyla yayınlandı (${publishedProducts.length} ürün)`)
     } catch (error) {
