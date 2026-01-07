@@ -1,3 +1,5 @@
+'use client'
+
 export default function DashboardPage() {
   return (
     <div style={{
@@ -6,14 +8,17 @@ export default function DashboardPage() {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#f5f5f5',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      padding: '20px'
     }}>
       <div style={{
         textAlign: 'center',
         padding: '40px',
         backgroundColor: 'white',
         borderRadius: '12px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        maxWidth: '600px',
+        width: '100%'
       }}>
         <h1 style={{
           fontSize: '32px',
