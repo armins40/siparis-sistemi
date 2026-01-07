@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 html, body {
   height: 100%;
 }
