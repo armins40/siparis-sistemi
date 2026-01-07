@@ -130,69 +130,42 @@ export default function CustomerMenuPage() {
       }
     }
 
-    // Load products from localStorage ONLY
-    try {
-      setIsLoading(true)
-      const publishedProductsStr = localStorage.getItem('siparisPublishedProducts')
-      
-      if (!publishedProductsStr) {
-        setProducts([])
-        setIsLoading(false)
-        return
-      }
-
-      const parsed = JSON.parse(publishedProductsStr)
-      
-      if (Array.isArray(parsed)) {
-        setProducts(parsed)
-      } else {
-        setProducts([])
-      }
-    } catch (error) {
-      console.error('[Menu Page] Error loading products:', error)
-      setProducts([])
-    } finally {
-      setIsLoading(false)
-    }
-
-    // Listen for updates
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'siparisPublishedProducts') {
-        try {
-          const publishedProductsStr = localStorage.getItem('siparisPublishedProducts')
-          if (publishedProductsStr) {
-            const parsed = JSON.parse(publishedProductsStr)
-            if (Array.isArray(parsed)) {
-              setProducts(parsed)
-            }
-          }
-        } catch (error) {
-          console.error('Error reloading products:', error)
-        }
-      }
-    }
-
-    const handleCustomEvent = () => {
+    // Load products from API
+    async function loadProducts() {
       try {
-        const publishedProductsStr = localStorage.getItem('siparisPublishedProducts')
-        if (publishedProductsStr) {
-          const parsed = JSON.parse(publishedProductsStr)
-          if (Array.isArray(parsed)) {
-            setProducts(parsed)
-          }
+        setIsLoading(true)
+        setLoadError(false)
+        
+        const response = await fetch('/api/products', {
+          cache: 'no-store',
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch products')
+        }
+
+        const data = await response.json()
+        
+        // MUST check if it's an array
+        if (data.products && Array.isArray(data.products)) {
+          setProducts(data.products)
+          console.log('Products count:', data.products.length)
+        } else {
+          console.warn('API response is not an array:', typeof data.products)
+          setProducts([])
+          console.log('Products count: 0 (not an array)')
         }
       } catch (error) {
-        console.error('Error reloading products:', error)
+        console.error('[Menu Page] Error loading products:', error)
+        setLoadError(true)
+        setProducts([])
+        console.log('Products count: 0 (load error)')
+      } finally {
+        setIsLoading(false)
       }
     }
 
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('siparisProductsPublished', handleCustomEvent)
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('siparisProductsPublished', handleCustomEvent)
-    }
+    loadProducts()
   }, [businessSlug])
 
   // Safe category grouping
@@ -657,8 +630,35 @@ export default function CustomerMenuPage() {
           </div>
         )}
 
+        {/* Error State */}
+        {loadError && !isLoading && (
+          <div style={emptyStateStyle}>
+            <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#dc2626', margin: '0 0 12px 0' }}>
+              Hata Oluştu
+            </h2>
+            <p style={{ fontSize: '16px', color: '#666', margin: '0 0 20px 0', lineHeight: '1.6' }}>
+              Ürünler yüklenirken bir sorun oluştu. Lütfen sayfayı yenileyin.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#ffffff',
+                backgroundColor: '#3b82f6',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              Sayfayı Yenile
+            </button>
+          </div>
+        )}
+
         {/* Empty Menu State */}
-        {!isLoading && products.length === 0 && (
+        {!isLoading && !loadError && products.length === 0 && (
           <div style={emptyStateStyle}>
             <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a', margin: '0 0 12px 0' }}>
               Henüz ürün bulunmuyor
@@ -670,7 +670,7 @@ export default function CustomerMenuPage() {
         )}
 
         {/* Products Display */}
-        {!isLoading && products.length > 0 && (
+        {!isLoading && !loadError && products.length > 0 && (
           <div>
             {Object.entries(groupedByCategory).map(([categoryName, categoryProducts]) => (
               <div key={categoryName} style={categorySectionStyle}>

@@ -18,37 +18,33 @@ export default function AdminPage() {
     category: ''
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
-  // Load products from localStorage on mount
+  // Load products from API on mount
   useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    try {
-      const stored = localStorage.getItem('siparisPublishedProducts')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed)) {
-          setProducts(parsed)
+    async function loadProducts() {
+      try {
+        setIsLoading(true)
+        const response = await fetch('/api/products')
+        
+        if (!response.ok) {
+          throw new Error('Failed to load products')
         }
+
+        const data = await response.json()
+        if (data.products && Array.isArray(data.products)) {
+          setProducts(data.products)
+        }
+      } catch (error) {
+        console.error('Error loading products:', error)
+        alert('Ürünler yüklenirken bir hata oluştu.')
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error('Error loading products:', error)
-    } finally {
-      setIsLoading(false)
     }
+
+    loadProducts()
   }, [])
-
-  // Save to localStorage whenever products change
-  useEffect(() => {
-    if (typeof window === 'undefined' || isLoading) return
-
-    try {
-      localStorage.setItem('siparisPublishedProducts', JSON.stringify(products))
-      console.log('Products saved to localStorage:', products.length)
-    } catch (error) {
-      console.error('Error saving products:', error)
-    }
-  }, [products, isLoading])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -58,7 +54,7 @@ export default function AdminPage() {
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const name = formData.name.trim()
@@ -78,19 +74,81 @@ export default function AdminPage() {
       image: `https://via.placeholder.com/150?text=${encodeURIComponent(name)}`
     }
 
-    setProducts(prev => [...prev, newProduct])
+    try {
+      setIsSaving(true)
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'add',
+          product: newProduct,
+        }),
+      })
 
-    // Reset form
-    setFormData({
-      name: '',
-      price: '',
-      category: ''
-    })
+      if (!response.ok) {
+        throw new Error('Failed to save product')
+      }
+
+      // Reload products from API
+      const productsResponse = await fetch('/api/products')
+      if (productsResponse.ok) {
+        const data = await productsResponse.json()
+        if (data.products && Array.isArray(data.products)) {
+          setProducts(data.products)
+        }
+      }
+
+      // Reset form
+      setFormData({
+        name: '',
+        price: '',
+        category: ''
+      })
+    } catch (error) {
+      console.error('Error saving product:', error)
+      alert('Ürün kaydedilirken bir hata oluştu.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm('Bu ürünü silmek istediğinizden emin misiniz?')) {
-      setProducts(prev => prev.filter(p => p.id !== id))
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu ürünü silmek istediğinizden emin misiniz?')) {
+      return
+    }
+
+    try {
+      setIsSaving(true)
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          productId: id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete product')
+      }
+
+      // Reload products from API
+      const productsResponse = await fetch('/api/products')
+      if (productsResponse.ok) {
+        const data = await productsResponse.json()
+        if (data.products && Array.isArray(data.products)) {
+          setProducts(data.products)
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error)
+      alert('Ürün silinirken bir hata oluştu.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -316,8 +374,12 @@ export default function AdminPage() {
             </select>
           </div>
 
-          <button type="submit" style={buttonStyle}>
-            Ürün Ekle
+          <button type="submit" disabled={isSaving} style={{
+            ...buttonStyle,
+            opacity: isSaving ? 0.6 : 1,
+            cursor: isSaving ? 'not-allowed' : 'pointer'
+          }}>
+            {isSaving ? 'Kaydediliyor...' : 'Ürün Ekle'}
           </button>
         </form>
       </div>

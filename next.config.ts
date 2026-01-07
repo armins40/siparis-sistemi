@@ -1,10 +1,8 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  // Ignore TypeScript errors during build for Vercel deployment
+const nextConfig = {
+  reactStrictMode: true,
   typescript: {
     ignoreBuildErrors: true,
   },
-};
+}
 
-export default nextConfig;
+export default nextConfig

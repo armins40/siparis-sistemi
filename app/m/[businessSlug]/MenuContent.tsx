@@ -126,7 +126,9 @@ export default function MenuContent({ businessName, logoUrl, categories }: MenuC
         {categories.map((category) => (
           <section
             key={category.id}
-            ref={(el) => (categoryRefs.current[String(category.id)] = el)}
+            ref={(el) => {
+              categoryRefs.current[String(category.id)] = el as HTMLDivElement | null
+            }}
             style={categorySectionStyle}
           >
             <h2 style={categoryTitleStyle}>{category.name}</h2>

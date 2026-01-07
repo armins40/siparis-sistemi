@@ -231,7 +231,7 @@ export default function ProductsPage() {
       if (!setting) return
       
       // Must be active (handle both boolean and string from localStorage)
-      const isActive = setting.active === true || setting.active === "true" || String(setting.active) === "true"
+      const isActive = setting.active === true || String(setting.active) === "true"
       if (!isActive) return
       
       // Must have a valid price > 0
