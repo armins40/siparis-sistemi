@@ -130,57 +130,39 @@ export default function ProductsPage() {
     const price = value === '' ? null : parseFloat(value)
     if (price !== null && (isNaN(price) || price < 0)) return
 
-    // Update local state
+    // Update local state only (save on explicit "Kaydet" button click)
     const newSettings = { ...productSettingsMap[productId] || { active: true, outOfStock: false }, price }
     const updatedMap = {
       ...productSettingsMap,
       [productId]: newSettings
     }
     setProductSettingsMap(updatedMap)
-    
-    // Save to localStorage immediately
-    if (storeSlug) {
-      const productDataKey = `siparisProducts_${storeSlug}`
-      localStorage.setItem(productDataKey, JSON.stringify(updatedMap))
-    }
   }
 
   const handleActiveToggle = (productId: string) => {
     const current = productSettingsMap[productId] || { price: null, active: true, outOfStock: false }
     const newActive = !current.active
 
-    // Update local state
+    // Update local state only (save on explicit "Kaydet" button click)
     const newSettings = { ...current, active: newActive }
     const updatedMap = {
       ...productSettingsMap,
       [productId]: newSettings
     }
     setProductSettingsMap(updatedMap)
-    
-    // Save to localStorage immediately
-    if (storeSlug) {
-      const productDataKey = `siparisProducts_${storeSlug}`
-      localStorage.setItem(productDataKey, JSON.stringify(updatedMap))
-    }
   }
 
   const handleOutOfStockToggle = (productId: string) => {
     const current = productSettingsMap[productId] || { price: null, active: true, outOfStock: false }
     const newOutOfStock = !current.outOfStock
 
-    // Update local state
+    // Update local state only (save on explicit "Kaydet" button click)
     const newSettings = { ...current, outOfStock: newOutOfStock }
     const updatedMap = {
       ...productSettingsMap,
       [productId]: newSettings
     }
     setProductSettingsMap(updatedMap)
-    
-    // Save to localStorage immediately
-    if (storeSlug) {
-      const productDataKey = `siparisProducts_${storeSlug}`
-      localStorage.setItem(productDataKey, JSON.stringify(updatedMap))
-    }
   }
 
   const handleSave = () => {
@@ -190,11 +172,11 @@ export default function ProductsPage() {
     setSaveMessage('')
 
     try {
-      // Save all product settings to siparisProducts_{storeSlug} (admin-only)
+      // Save settings to localStorage as draft (only for this page's state)
       const productDataKey = `siparisProducts_${storeSlug}`
       localStorage.setItem(productDataKey, JSON.stringify(productSettingsMap))
 
-      setSaveMessage('Ürünler başarıyla kaydedildi!')
+      setSaveMessage('Ayarlar kaydedildi. Yayınlamak için "Yayınla" butonuna basın.')
       setTimeout(() => {
         setSaveMessage('')
       }, 3000)
@@ -206,74 +188,74 @@ export default function ProductsPage() {
     }
   }
 
-  const publishProducts = () => {
+  const publishProducts = async () => {
     if (!storeSlug || typeof window === 'undefined') {
       alert("Mağaza bilgisi bulunamadı")
       return
     }
 
-    const raw = localStorage.getItem(`siparisProducts_${storeSlug}`)
-    if (!raw) {
-      alert("Ürün bulunamadı")
-      return
-    }
-
-    const parsed = JSON.parse(raw)
-    console.log('DEBUG PUBLISH: Parsed settings:', parsed)
-
-    // Match settings with PRODUCT_CATALOG to get full product objects
-    const publishedProducts: Array<Product & { price: number }> = []
+    // Build published products from current settings state
+    const publishedProducts: any[] = []
 
     PRODUCT_CATALOG.forEach(product => {
-      const setting = parsed[product.id] as ProductSettings | undefined
+      const setting = productSettingsMap[product.id]
       
-      // Must have a setting
       if (!setting) return
       
-      // Must be active (handle both boolean and string from localStorage)
+      // Must be active
       const isActive = setting.active === true || String(setting.active) === "true"
       if (!isActive) return
       
       // Must have a valid price > 0
       if (setting.price === null || setting.price === undefined || setting.price <= 0) return
       
-      // Must not be out of stock
-      if (setting.outOfStock === true) return
+      // Build full product object for API (matching admin panel format)
+      const publishedProduct = {
+        id: String(product.id),
+        name: product.name,
+        price: setting.price,
+        category: product.subcategory || product.category || 'Diğer',
+        image: product.image || `https://via.placeholder.com/150?text=${encodeURIComponent(product.name)}`,
+        unit: 'kg', // Default unit
+        stock: setting.outOfStock ? 0 : 100 // Default stock
+      }
       
-      // Add full product object with price
-      publishedProducts.push({
-        ...product,
-        price: setting.price
-      })
+      publishedProducts.push(publishedProduct)
     })
-
-    console.log('DEBUG PUBLISH: Published products count:', publishedProducts.length)
-    console.log('DEBUG PUBLISH: Published products:', publishedProducts)
 
     if (publishedProducts.length === 0) {
       alert("Aktif ürün yok veya fiyat girilmemiş")
       return
     }
 
-    localStorage.setItem(
-      "siparisPublishedProducts",
-      JSON.stringify(publishedProducts)
-    )
+    // POST to /api/products (replace all products)
+    try {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(publishedProducts), // Send array to replace all
+      })
 
-    // Dispatch custom event to notify other tabs/pages
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('siparisProductsPublished'))
+      if (!response.ok) {
+        throw new Error('Failed to publish products')
+      }
+
+      alert(`Ürünler başarıyla yayınlandı (${publishedProducts.length} ürün)`)
+    } catch (error) {
+      console.error('[Publish] Error:', error)
+      alert('Ürünler yayınlanırken bir hata oluştu')
+      throw error
     }
-
-    alert(`Ürünler başarıyla yayınlandı (${publishedProducts.length} ürün)`)
   }
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     setIsPublishing(true)
     setSaveMessage('')
 
     try {
-      publishProducts()
+      await publishProducts()
       setSaveMessage('Ürünler başarıyla yayınlandı!')
       setTimeout(() => {
         setSaveMessage('')
