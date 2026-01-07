@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // CSP headers with unsafe-eval allowed
+  // CSP headers with unsafe-eval allowed and relaxed for browser extensions
   async headers() {
     return [
       {
@@ -14,18 +14,26 @@ const nextConfig: NextConfig = {
           {
             key: 'Content-Security-Policy',
             value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data:",
+              "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob:",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob: chrome-extension: moz-extension:",
               "style-src 'self' 'unsafe-inline' https: http: data:",
               "img-src 'self' data: https: http: blob:",
               "font-src 'self' data: https: http:",
-              "connect-src 'self' https: http: wss: ws:",
-              "frame-src 'self' https: http:",
+              "connect-src 'self' https: http: wss: ws: chrome-extension: moz-extension:",
+              "frame-src 'self' https: http: chrome-extension: moz-extension:",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
-              "frame-ancestors 'none'",
+              "frame-ancestors 'self'",
             ].join('; '),
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
           },
         ],
       },
