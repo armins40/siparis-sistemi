@@ -29,6 +29,11 @@ interface Translations {
   locationError: string
   gettingLocation: string
   locationReceived: string
+  loadingMenu: string
+  menuNotAvailable: string
+  menuNotAvailableDesc: string
+  errorLoadingMenu: string
+  errorLoadingMenuDesc: string
 }
 
 const translations: Record<Language, Translations> = {
@@ -48,7 +53,12 @@ const translations: Record<Language, Translations> = {
     locationPermissionDenied: 'Konum izni verilmedi',
     locationError: 'Konum alınamadı',
     gettingLocation: 'Konum alınıyor...',
-    locationReceived: '✓ Konum alındı'
+    locationReceived: '✓ Konum alındı',
+    loadingMenu: 'Menü yükleniyor...',
+    menuNotAvailable: 'Menü Henüz Hazır Değil',
+    menuNotAvailableDesc: 'Bu işletmenin menüsü şu anda mevcut değil. Lütfen ürün eklemek için yönetim paneline giriş yapın.',
+    errorLoadingMenu: 'Menü Yüklenemedi',
+    errorLoadingMenuDesc: 'Menü bilgileri yüklenirken bir sorun oluştu. Lütfen sayfayı yenileyin.'
   },
   en: {
     shopName: 'Shop Name',
@@ -66,7 +76,12 @@ const translations: Record<Language, Translations> = {
     locationPermissionDenied: 'Location permission denied',
     locationError: 'Failed to get location',
     gettingLocation: 'Getting location...',
-    locationReceived: '✓ Location received'
+    locationReceived: '✓ Location received',
+    loadingMenu: 'Loading menu...',
+    menuNotAvailable: 'Menu Not Available',
+    menuNotAvailableDesc: 'This restaurant\'s menu is currently not available. Please log in to the admin panel to add products.',
+    errorLoadingMenu: 'Failed to Load Menu',
+    errorLoadingMenuDesc: 'There was a problem loading the menu. Please refresh the page.'
   },
   ar: {
     shopName: 'اسم المتجر',
@@ -84,7 +99,12 @@ const translations: Record<Language, Translations> = {
     locationPermissionDenied: 'تم رفض إذن الموقع',
     locationError: 'فشل الحصول على الموقع',
     gettingLocation: 'جاري الحصول على الموقع...',
-    locationReceived: '✓ تم الحصول على الموقع'
+    locationReceived: '✓ تم الحصول على الموقع',
+    loadingMenu: 'جاري تحميل القائمة...',
+    menuNotAvailable: 'القائمة غير متاحة',
+    menuNotAvailableDesc: 'قائمة هذا المطعم غير متاحة حالياً. يرجى تسجيل الدخول إلى لوحة الإدارة لإضافة المنتجات.',
+    errorLoadingMenu: 'فشل تحميل القائمة',
+    errorLoadingMenuDesc: 'حدثت مشكلة أثناء تحميل القائمة. يرجى تحديث الصفحة.'
   }
 }
 
@@ -102,6 +122,8 @@ export default function MenuPage() {
   const [businessTypes, setBusinessTypes] = useState<ParentCategory[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [availableProducts, setAvailableProducts] = useState<Array<Product & { price: number }>>([])
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [loadError, setLoadError] = useState<boolean>(false)
   const [address, setAddress] = useState<string>('')
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationLoading, setLocationLoading] = useState<boolean>(false)
@@ -110,54 +132,71 @@ export default function MenuPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Load shop data
-    const userStr = localStorage.getItem('siparisUser')
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr)
-        setBusinessName(user.businessName || 'Mağaza')
-      } catch {
-        setBusinessName('Mağaza')
-      }
-    }
+    try {
+      setIsLoading(true)
+      setLoadError(false)
 
-    // Load business types
-    const savedData = localStorage.getItem(DASHBOARD_DATA_KEY)
-    if (savedData) {
-      try {
-        const data = JSON.parse(savedData) as DashboardData
-        setBusinessTypes(data.businessTypes || [])
-      } catch {
-        // Ignore
+      // Load shop data
+      const userStr = localStorage.getItem('siparisUser')
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          setBusinessName(user.businessName || 'Mağaza')
+        } catch {
+          setBusinessName('Mağaza')
+        }
       }
+
+      // Load business types
+      const savedData = localStorage.getItem(DASHBOARD_DATA_KEY)
+      if (savedData) {
+        try {
+          const data = JSON.parse(savedData) as DashboardData
+          setBusinessTypes(data.businessTypes || [])
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    } catch (error) {
+      console.error('[Menu Page] Error loading data:', error)
+      setLoadError(true)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Load available products (active with prices)
-    const settings = productSettings.getAll()
-    const filtered = PRODUCT_CATALOG.filter(product => {
-      // Filter by business types
-      if (businessTypes.length > 0 && !businessTypes.includes(product.parentCategory)) {
-        return false
-      }
+    try {
+      // Load available products (active with prices)
+      const settings = productSettings.getAll()
+      const filtered = PRODUCT_CATALOG.filter(product => {
+        // Filter by business types
+        if (businessTypes.length > 0 && !businessTypes.includes(product.parentCategory)) {
+          return false
+        }
 
-      // Check if product is active, has price, and is in stock
-      const productSetting = settings[product.id] || { price: null, active: true, outOfStock: false }
-      return productSetting.active && 
-             productSetting.price !== null && 
-             productSetting.price > 0 && 
-             !productSetting.outOfStock
-    })
+        // Check if product is active, has price, and is in stock
+        const productSetting = settings[product.id] || { price: null, active: true, outOfStock: false }
+        return productSetting.active && 
+               productSetting.price !== null && 
+               productSetting.price > 0 && 
+               !productSetting.outOfStock
+      })
 
-    const productsWithPrices = filtered.map(product => ({
-      ...product,
-      price: settings[product.id]?.price || 0
-    }))
+      const productsWithPrices = filtered.map(product => ({
+        ...product,
+        price: settings[product.id]?.price || 0
+      }))
 
-    setAvailableProducts(productsWithPrices)
+      setAvailableProducts(productsWithPrices)
+      setLoadError(false)
+    } catch (error) {
+      console.error('[Menu Page] Error loading products:', error)
+      setLoadError(true)
+      setAvailableProducts([])
+    }
   }, [businessTypes])
 
   // Group products by parentCategory → subcategory
@@ -482,9 +521,49 @@ export default function MenuPage() {
 
   const emptyStateStyle: React.CSSProperties = {
     textAlign: 'center',
-    padding: '40px 20px',
-    color: '#666'
+    padding: '60px 20px',
+    color: '#666',
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    maxWidth: '600px',
+    margin: '40px auto'
   }
+
+  const emptyStateTitleStyle: React.CSSProperties = {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    margin: '0 0 12px 0'
+  }
+
+  const emptyStateDescStyle: React.CSSProperties = {
+    fontSize: '16px',
+    color: '#666',
+    margin: '0',
+    lineHeight: '1.6'
+  }
+
+  const loadingStateStyle: React.CSSProperties = {
+    textAlign: 'center',
+    padding: '60px 20px',
+    color: '#666',
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    maxWidth: '600px',
+    margin: '40px auto'
+  }
+
+  const loadingSpinnerStyle: React.CSSProperties = {
+    width: '48px',
+    height: '48px',
+    border: '4px solid #e5e7eb',
+    borderTopColor: '#3b82f6',
+    borderRadius: '50%',
+    margin: '0 auto 16px',
+    animation: 'spin 1s linear infinite'
+  } as React.CSSProperties & { animation: string }
 
   return (
     <div style={containerStyle}>
@@ -505,11 +584,54 @@ export default function MenuPage() {
       </div>
 
       <div style={contentStyle}>
-        {availableProducts.length === 0 ? (
-          <div style={emptyStateStyle}>
-            <p>{t.noProducts}</p>
+        {/* Loading State */}
+        {isLoading && (
+          <div style={loadingStateStyle}>
+            <div style={loadingSpinnerStyle} />
+            <p style={{ fontSize: '16px', color: '#666', margin: '0' }}>
+              {t.loadingMenu}
+            </p>
           </div>
-        ) : (
+        )}
+
+        {/* Error State */}
+        {loadError && !isLoading && (
+          <div style={emptyStateStyle}>
+            <h2 style={emptyStateTitleStyle}>{t.errorLoadingMenu}</h2>
+            <p style={emptyStateDescStyle}>
+              {t.errorLoadingMenuDesc}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#ffffff',
+                backgroundColor: '#3b82f6',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                marginTop: '20px'
+              }}
+            >
+              {t.language === 'tr' ? 'Sayfayı Yenile' : t.language === 'ar' ? 'تحديث الصفحة' : 'Refresh Page'}
+            </button>
+          </div>
+        )}
+
+        {/* Empty Menu State */}
+        {!isLoading && !loadError && availableProducts.length === 0 && (
+          <div style={emptyStateStyle}>
+            <h2 style={emptyStateTitleStyle}>{t.menuNotAvailable}</h2>
+            <p style={emptyStateDescStyle}>
+              {t.menuNotAvailableDesc}
+            </p>
+          </div>
+        )}
+
+        {/* Products Display */}
+        {!isLoading && !loadError && availableProducts.length > 0 && (
           (Object.keys(groupedProducts) as ParentCategory[]).map((parentCategory) => {
             const subcategories = groupedProducts[parentCategory]
             const hasSubcategories = Object.keys(subcategories).length > 0

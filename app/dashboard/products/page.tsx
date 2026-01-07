@@ -260,6 +260,11 @@ export default function ProductsPage() {
       JSON.stringify(publishedProducts)
     )
 
+    // Dispatch custom event to notify other tabs/pages
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('siparisProductsPublished'))
+    }
+
     alert(`Ürünler başarıyla yayınlandı (${publishedProducts.length} ürün)`)
   }
 

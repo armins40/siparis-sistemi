@@ -51,7 +51,14 @@ const translations: Record<Language, Translations> = {
     locationPermissionDenied: 'Konum izni verilmedi',
     locationError: 'Konum alınamadı',
     gettingLocation: 'Konum alınıyor...',
-    locationReceived: '✓ Konum alındı'
+    locationReceived: '✓ Konum alındı',
+    loadingMenu: 'Menü yükleniyor...',
+    menuNotAvailable: 'Menü Henüz Hazır Değil',
+    menuNotAvailableDesc: 'Bu işletmenin menüsü şu anda mevcut değil. Lütfen daha sonra tekrar deneyin.',
+    apiError: 'Menü Yüklenemedi',
+    apiErrorDesc: 'Menü bilgileri yüklenirken bir sorun oluştu. Lütfen tekrar deneyin.',
+    retry: 'Tekrar Dene',
+    retrying: 'Yeniden deneniyor...'
   },
   en: {
     shopName: 'Shop Name',
@@ -67,7 +74,14 @@ const translations: Record<Language, Translations> = {
     locationPermissionDenied: 'Location permission denied',
     locationError: 'Failed to get location',
     gettingLocation: 'Getting location...',
-    locationReceived: '✓ Location received'
+    locationReceived: '✓ Location received',
+    loadingMenu: 'Loading menu...',
+    menuNotAvailable: 'Menu Not Available',
+    menuNotAvailableDesc: 'This restaurant\'s menu is currently not available. Please check back later.',
+    apiError: 'Failed to Load Menu',
+    apiErrorDesc: 'There was a problem loading the menu. Please try again.',
+    retry: 'Retry',
+    retrying: 'Retrying...'
   },
   ar: {
     shopName: 'اسم المتجر',
@@ -83,7 +97,14 @@ const translations: Record<Language, Translations> = {
     locationPermissionDenied: 'تم رفض إذن الموقع',
     locationError: 'فشل الحصول على الموقع',
     gettingLocation: 'جاري الحصول على الموقع...',
-    locationReceived: '✓ تم الحصول على الموقع'
+    locationReceived: '✓ تم الحصول على الموقع',
+    loadingMenu: 'جاري تحميل القائمة...',
+    menuNotAvailable: 'القائمة غير متاحة',
+    menuNotAvailableDesc: 'قائمة هذا المطعم غير متاحة حالياً. يرجى المحاولة لاحقاً.',
+    apiError: 'فشل تحميل القائمة',
+    apiErrorDesc: 'حدثت مشكلة أثناء تحميل القائمة. يرجى المحاولة مرة أخرى.',
+    retry: 'إعادة المحاولة',
+    retrying: 'جاري إعادة المحاولة...'
   }
 }
 
@@ -97,6 +118,9 @@ export default function CustomerMenuPage() {
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [availableProducts, setAvailableProducts] = useState<Array<Product & { price: number }>>([])
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [apiError, setApiError] = useState<boolean>(false)
+  const [isRetrying, setIsRetrying] = useState<boolean>(false)
   const [address, setAddress] = useState<string>('')
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationLoading, setLocationLoading] = useState<boolean>(false)
@@ -131,34 +155,90 @@ export default function CustomerMenuPage() {
       }
     }
 
-    // TEMPORARY: Read raw products array without any filters for debugging
-    try {
-      const raw = localStorage.getItem('siparisPublishedProducts')
-      if (!raw) {
-        console.log('DEBUG: No raw data found')
+    // Load menu data from localStorage (siparisPublishedProducts)
+    // TODO: Replace with API call when database is ready
+    function loadMenuFromLocalStorage() {
+      try {
+        setIsLoading(true)
+        setApiError(false)
+        
+        console.debug('[Menu Page] Loading products from localStorage')
+        
+        // Try to load from localStorage
+        const publishedProductsStr = localStorage.getItem('siparisPublishedProducts')
+        
+        if (!publishedProductsStr) {
+          console.debug('[Menu Page] No published products found in localStorage')
+          setAvailableProducts([])
+          setIsLoading(false)
+          return
+        }
+
+        const publishedProducts = JSON.parse(publishedProductsStr)
+        
+        if (!Array.isArray(publishedProducts)) {
+          console.debug('[Menu Page] Published products is not an array:', typeof publishedProducts)
+          setAvailableProducts([])
+          setIsLoading(false)
+          return
+        }
+
+        console.debug('[Menu Page] Loaded products from localStorage:', {
+          count: publishedProducts.length,
+          sample: publishedProducts.slice(0, 3).map((p: any) => ({ id: p.id, name: p.name, price: p.price }))
+        })
+
+        // Transform to the expected format
+        const formattedProducts: Array<Product & { price: number }> = publishedProducts.map((p: any) => ({
+          id: String(p.id),
+          name: p.name || 'Ürün',
+          subcategory: p.subcategory || 'Genel',
+          parentCategory: (p.parentCategory || 'Market') as ParentCategory,
+          image: p.image || 'https://via.placeholder.com/150',
+          price: typeof p.price === 'number' ? p.price : 0,
+        }))
+
+        setAvailableProducts(formattedProducts)
+        setApiError(false)
+      } catch (error) {
+        console.error('[Menu Page] Error loading products from localStorage:', error)
+        setApiError(true)
         setAvailableProducts([])
-        return
+      } finally {
+        setIsLoading(false)
+        setIsRetrying(false)
       }
-
-      const productsArray = JSON.parse(raw)
-      console.log('DEBUG: Parsed productsArray:', productsArray)
-      console.log('DEBUG: Array length:', productsArray?.length)
-      console.log('DEBUG: Is array?', Array.isArray(productsArray))
-
-      // Ensure it's an array
-      if (!Array.isArray(productsArray)) {
-        console.log('DEBUG: Not an array, type:', typeof productsArray)
-        setAvailableProducts([])
-        return
-      }
-
-      // TEMPORARY: Use raw products array directly without any filters
-      setAvailableProducts(productsArray as Array<Product & { price: number }>)
-      console.log('DEBUG: Set availableProducts:', productsArray.length, 'items')
-    } catch (error) {
-      console.error('DEBUG: Error parsing products:', error)
-      setAvailableProducts([])
     }
+
+    // Also set up a listener for localStorage changes (when admin publishes)
+    function setupStorageListener() {
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'siparisPublishedProducts') {
+          console.debug('[Menu Page] Detected localStorage change, reloading products')
+          loadMenuFromLocalStorage()
+        }
+      }
+
+      window.addEventListener('storage', handleStorageChange)
+      
+      // Also listen for custom events (same-window updates)
+      const handleCustomStorageChange = () => {
+        console.debug('[Menu Page] Detected custom storage event, reloading products')
+        loadMenuFromLocalStorage()
+      }
+      
+      window.addEventListener('siparisProductsPublished', handleCustomStorageChange)
+
+      return () => {
+        window.removeEventListener('storage', handleStorageChange)
+        window.removeEventListener('siparisProductsPublished', handleCustomStorageChange)
+      }
+    }
+
+    loadMenuFromLocalStorage()
+    const cleanup = setupStorageListener()
+    
+    return cleanup
   }, [businessSlug])
 
   // Group products by parentCategory → subcategory
@@ -564,18 +644,71 @@ export default function CustomerMenuPage() {
     fontWeight: '600'
   }
 
-  const emptyStateStyle: React.CSSProperties = {
+  const loadingStateStyle: React.CSSProperties = {
     textAlign: 'center',
-    padding: '40px 20px',
+    padding: '60px 20px',
     color: '#666',
     backgroundColor: '#ffffff',
     borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    maxWidth: '600px',
+    margin: '40px auto'
   }
 
-  // TEMPORARY: Simple product count check
+  const loadingSpinnerStyle: React.CSSProperties = {
+    width: '48px',
+    height: '48px',
+    border: '4px solid #e5e7eb',
+    borderTopColor: '#3b82f6',
+    borderRadius: '50%',
+    margin: '0 auto 16px',
+    animation: 'spin 1s linear infinite'
+  }
+
+  const emptyStateTitleStyle: React.CSSProperties = {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    margin: '0 0 12px 0'
+  }
+
+  const emptyStateDescStyle: React.CSSProperties = {
+    fontSize: '16px',
+    color: '#666',
+    margin: '0 0 24px 0',
+    lineHeight: '1.6'
+  }
+
+  const retryButtonStyle: React.CSSProperties = {
+    padding: '12px 24px',
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#ffffff',
+    backgroundColor: '#3b82f6',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s ease'
+  }
+
+  const emptyStateStyle: React.CSSProperties = {
+    textAlign: 'center',
+    padding: '60px 20px',
+    color: '#666',
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    maxWidth: '600px',
+    margin: '40px auto'
+  }
+
+  // Check if we have products
   const hasProducts = availableProducts.length > 0
-  console.log('DEBUG: hasProducts:', hasProducts, 'availableProducts.length:', availableProducts.length)
+  console.debug('[Menu Page] Render check:', {
+    hasProducts,
+    availableProductsLength: availableProducts.length,
+    sampleProducts: availableProducts.slice(0, 3).map(p => ({ id: p.id, name: p.name }))
+  })
 
   return (
     <div style={containerStyle}>
@@ -608,19 +741,72 @@ export default function CustomerMenuPage() {
       </div>
 
       <div style={contentStyle}>
-        {/* TEMPORARY: Debug info */}
-        <div style={{ padding: '16px', backgroundColor: '#f0f0f0', marginBottom: '16px', borderRadius: '8px' }}>
-          <strong>DEBUG:</strong> Products count: {availableProducts.length}
-        </div>
-
-        {!hasProducts ? (
-          <div style={emptyStateStyle}>
-            <p>{t.noProducts}</p>
-            <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
-              (No products found - count: {availableProducts.length})
+        {/* Loading State */}
+        {isLoading && !apiError && (
+          <div style={loadingStateStyle}>
+            <div style={loadingSpinnerStyle} />
+            <p style={{ fontSize: '16px', color: '#666', margin: '0' }}>
+              {t.loadingMenu}
             </p>
           </div>
-        ) : (
+        )}
+
+        {/* API Error State */}
+        {apiError && !isLoading && (
+          <div style={emptyStateStyle}>
+            <h2 style={emptyStateTitleStyle}>{t.apiError}</h2>
+            <p style={emptyStateDescStyle}>
+              {t.apiErrorDesc}
+            </p>
+            <button
+              onClick={() => {
+                // Reload from localStorage
+                const publishedProductsStr = localStorage.getItem('siparisPublishedProducts')
+                if (publishedProductsStr) {
+                  try {
+                    const products = JSON.parse(publishedProductsStr)
+                    if (Array.isArray(products)) {
+                      const formattedProducts: Array<Product & { price: number }> = products.map((p: any) => ({
+                        id: String(p.id),
+                        name: p.name || 'Ürün',
+                        subcategory: p.subcategory || 'Genel',
+                        parentCategory: (p.parentCategory || 'Market') as ParentCategory,
+                        image: p.image || 'https://via.placeholder.com/150',
+                        price: typeof p.price === 'number' ? p.price : 0,
+                      }))
+                      setAvailableProducts(formattedProducts)
+                      setApiError(false)
+                    }
+                  } catch (error) {
+                    console.error('Error reloading products:', error)
+                  }
+                }
+              }}
+              disabled={isRetrying}
+              style={{
+                ...retryButtonStyle,
+                backgroundColor: isRetrying ? '#9ca3af' : '#3b82f6',
+                cursor: isRetrying ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isRetrying ? t.retrying : t.retry}
+            </button>
+          </div>
+        )}
+
+        {/* No Categories / Empty Menu State */}
+        {!isLoading && !apiError && !hasProducts && (
+          <div style={emptyStateStyle}>
+            <h2 style={emptyStateTitleStyle}>{t.menuNotAvailable}</h2>
+            <p style={emptyStateDescStyle}>
+              {t.menuNotAvailableDesc}
+            </p>
+          </div>
+        )}
+
+        {/* Products Display */}
+        {!isLoading && !apiError && hasProducts && (
+
           <div>
             <h2 style={categoryTitleStyle}>All Products (Raw - No Filters)</h2>
             <div style={productListStyle}>
@@ -675,6 +861,15 @@ export default function CustomerMenuPage() {
           </div>
         )}
       </div>
+
+      {/* Add CSS animation for spinner */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `
+      }} />
 
       {cart.length > 0 && (
         <div style={cartStyle}>
