@@ -42,7 +42,7 @@ const translations: Record<Language, Translations> = {
     addToCart: 'Sepete Ekle',
     total: 'Toplam',
     sendOrder: 'Siparişi Gönder',
-    noProducts: 'Henüz ürün bulunmuyor',
+    noProducts: 'Henüz ürün yok',
     language: 'Dil',
     address: 'Adres (İsteğe Bağlı)',
     addressPlaceholder: 'Mahalle, Sokak, Bina No...',
@@ -146,14 +146,16 @@ export default function CustomerMenuPage() {
 
         const data = await response.json()
         
-        // MUST check if it's an array
+        // Log API response
+        console.log('API response:', data)
+        
+        // Directly set products from response
         if (Array.isArray(data)) {
           setProducts(data)
-          console.log('Products count:', data.length)
+          console.log('Products loaded:', data.length, 'items')
         } else {
-          console.warn('API response is not an array:', typeof data.products)
+          console.warn('API response is not an array:', typeof data)
           setProducts([])
-          console.log('Products count: 0 (not an array)')
         }
       } catch (error) {
         console.error('[Menu Page] Error loading products:', error)
@@ -661,7 +663,7 @@ export default function CustomerMenuPage() {
         {!isLoading && !loadError && products.length === 0 && (
           <div style={emptyStateStyle}>
             <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a', margin: '0 0 12px 0' }}>
-              Henüz ürün bulunmuyor
+              Henüz ürün yok
             </h2>
             <p style={{ fontSize: '16px', color: '#666', margin: '0', lineHeight: '1.6' }}>
               Bu işletmenin menüsü şu anda mevcut değil.
