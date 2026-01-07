@@ -147,9 +147,9 @@ export default function CustomerMenuPage() {
         const data = await response.json()
         
         // MUST check if it's an array
-        if (data.products && Array.isArray(data.products)) {
-          setProducts(data.products)
-          console.log('Products count:', data.products.length)
+        if (Array.isArray(data)) {
+          setProducts(data)
+          console.log('Products count:', data.length)
         } else {
           console.warn('API response is not an array:', typeof data.products)
           setProducts([])

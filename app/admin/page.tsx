@@ -32,8 +32,8 @@ export default function AdminPage() {
         }
 
         const data = await response.json()
-        if (data.products && Array.isArray(data.products)) {
-          setProducts(data.products)
+        if (Array.isArray(data)) {
+          setProducts(data)
         }
       } catch (error) {
         console.error('Error loading products:', error)
@@ -81,10 +81,7 @@ export default function AdminPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action: 'add',
-          product: newProduct,
-        }),
+        body: JSON.stringify(newProduct),
       })
 
       if (!response.ok) {
@@ -95,8 +92,8 @@ export default function AdminPage() {
       const productsResponse = await fetch('/api/products')
       if (productsResponse.ok) {
         const data = await productsResponse.json()
-        if (data.products && Array.isArray(data.products)) {
-          setProducts(data.products)
+        if (data && Array.isArray(data)) {
+          setProducts(data)
         }
       }
 
@@ -121,15 +118,24 @@ export default function AdminPage() {
 
     try {
       setIsSaving(true)
+      // For delete, we'll filter the products array
+      const currentProductsResponse = await fetch('/api/products')
+      if (!currentProductsResponse.ok) {
+        throw new Error('Failed to load products')
+      }
+      
+      const currentData = await currentProductsResponse.json()
+      const updatedProducts = Array.isArray(currentData) 
+        ? currentData.filter((p: any) => p.id !== id)
+        : []
+      
+      // Replace all products
       const response = await fetch('/api/products', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action: 'delete',
-          productId: id,
-        }),
+        body: JSON.stringify(updatedProducts),
       })
 
       if (!response.ok) {
@@ -140,8 +146,8 @@ export default function AdminPage() {
       const productsResponse = await fetch('/api/products')
       if (productsResponse.ok) {
         const data = await productsResponse.json()
-        if (data.products && Array.isArray(data.products)) {
-          setProducts(data.products)
+        if (data && Array.isArray(data)) {
+          setProducts(data)
         }
       }
     } catch (error) {
