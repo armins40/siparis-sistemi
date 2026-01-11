@@ -19,6 +19,11 @@
   }
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px; /* Sticky header yüksekliği için offset */
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
