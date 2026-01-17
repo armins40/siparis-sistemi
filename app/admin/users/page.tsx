@@ -133,6 +133,7 @@ export default function AdminUsersPage() {
   const getPlanLabel = (plan: User['plan']) => {
     const labels: Record<User['plan'], string> = {
       free: 'Ücretsiz',
+      trial: '7 Günlük Deneme',
       monthly: '1 Aylık',
       '6month': '6 Aylık',
       yearly: 'Yıllık',
@@ -157,8 +158,13 @@ export default function AdminUsersPage() {
 
       {/* Search */}
       <div className="bg-white rounded-xl shadow-lg p-4">
+        <label htmlFor="admin-user-search" className="sr-only">
+          Kullanıcı ara
+        </label>
         <input
           type="text"
+          id="admin-user-search"
+          name="admin-user-search"
           placeholder="E-posta, telefon veya isim ile ara..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -276,11 +282,13 @@ export default function AdminUsersPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="admin-user-name" className="block text-sm font-medium text-gray-700 mb-2">
                   İsim (Opsiyonel)
                 </label>
                 <input
                   type="text"
+                  id="admin-user-name"
+                  name="admin-user-name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -288,11 +296,13 @@ export default function AdminUsersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="admin-user-email" className="block text-sm font-medium text-gray-700 mb-2">
                   E-posta *
                 </label>
                 <input
                   type="email"
+                  id="admin-user-email"
+                  name="admin-user-email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -301,11 +311,13 @@ export default function AdminUsersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="admin-user-phone" className="block text-sm font-medium text-gray-700 mb-2">
                   Telefon *
                 </label>
                 <input
                   type="tel"
+                  id="admin-user-phone"
+                  name="admin-user-phone"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -317,15 +329,18 @@ export default function AdminUsersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="admin-user-plan" className="block text-sm font-medium text-gray-700 mb-2">
                   Plan
                 </label>
                 <select
+                  id="admin-user-plan"
+                  name="admin-user-plan"
                   value={formData.plan}
                   onChange={(e) => setFormData({ ...formData, plan: e.target.value as User['plan'] })}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="free">Ücretsiz</option>
+                  <option value="trial">7 Günlük Deneme</option>
                   <option value="monthly">1 Aylık</option>
                   <option value="6month">6 Aylık</option>
                   <option value="yearly">Yıllık</option>
@@ -335,12 +350,13 @@ export default function AdminUsersPage() {
               <div className="flex items-center">
                 <input
                   type="checkbox"
-                  id="isActive"
+                  id="admin-user-isActive"
+                  name="admin-user-isActive"
                   checked={formData.isActive}
                   onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                   className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
                 />
-                <label htmlFor="isActive" className="ml-2 text-sm font-medium text-gray-700">
+                <label htmlFor="admin-user-isActive" className="ml-2 text-sm font-medium text-gray-700">
                   Aktif
                 </label>
               </div>

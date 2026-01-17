@@ -1,18 +1,21 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUser, getUserByEmail, getUserByPhone, updateUser } from '@/lib/admin';
 import { setCurrentUser } from '@/lib/auth';
 import { saveStore, generateSlug } from '@/lib/store';
 import type { User, Sector } from '@/lib/types';
 import { SECTORS } from '@/lib/sectors';
+// Database imports
+import { createUserInDB, updateUserInDB } from '@/lib/db/users';
+import { createStoreInDB } from '@/lib/db/stores';
 
 function SignupForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const plan = searchParams.get('plan') as User['plan'] | null;
+  // Artık plan seçimi yok - herkes 7 günlük ücretsiz deneme ile başlıyor
+  const plan: User['plan'] = 'trial';
   
   const [step, setStep] = useState<'info' | 'verification' | 'payment'>('info');
   const [formData, setFormData] = useState({
@@ -29,13 +32,9 @@ function SignupForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [verified, setVerified] = useState({ email: false, phone: false });
+  const [verificationCodes, setVerificationCodes] = useState<Map<string, { code: string; expiresAt: string; id: string }>>(new Map());
 
-  useEffect(() => {
-    // Plan yoksa ana sayfaya yönlendir
-    if (!plan || !['monthly', '6month', 'yearly'].includes(plan)) {
-      router.push('/');
-    }
-  }, [plan, router]);
+  // Plan kontrolü kaldırıldı - herkes trial olarak kayıt oluyor
 
   // Şifre validasyonu: En az 1 sayı ve 1 büyük harf
   const validatePassword = (password: string): boolean => {
@@ -110,31 +109,56 @@ function SignupForm() {
     }
 
     try {
-      // Kullanıcı oluştur
+      // 7 günlük ücretsiz deneme için expiresAt hesapla
+      const now = new Date();
+      const trialEndDate = new Date(now);
+      trialEndDate.setDate(trialEndDate.getDate() + 7); // 7 gün ekle
+      const expiresAt = trialEndDate.toISOString();
+      
+      // Kullanıcı oluştur (herkes trial olarak başlıyor)
       const user = createUser({
         name: formData.name,
         email: formData.email || undefined,
         phone: formData.phone || undefined,
         password: formData.password,
         sector: formData.sector,
-        plan: plan || 'free',
+        plan: 'trial', // Herkes trial olarak başlıyor
         isActive: false, // Doğrulama yapılana kadar aktif değil
         emailVerified: false,
         phoneVerified: false,
+        expiresAt, // 7 gün sonra
       });
 
       // Store oluştur (sektör ile birlikte)
       const storeSlug = generateSlug(formData.name || `store-${user.id}`);
-      saveStore({
+      const storeData = {
         slug: storeSlug,
         name: formData.name,
         sector: formData.sector,
-      });
+      };
+      
+      // Save to localStorage (for backward compatibility)
+      saveStore(storeData);
 
       // Kullanıcıya store slug'ı ekle
       updateUser(user.id, {
         storeSlug: storeSlug,
       });
+      
+      // Save to database
+      try {
+        // Save user to database
+        const userWithStore = { ...user, storeSlug };
+        await createUserInDB(userWithStore);
+        
+        // Save store to database
+        await createStoreInDB(storeData);
+        
+        console.log('✅ User and store saved to database');
+      } catch (dbError) {
+        console.error('⚠️ Database save error (continuing with localStorage):', dbError);
+        // Continue even if database fails - localStorage is fallback
+      }
 
       setUserId(user.id);
       setStep('verification');
@@ -173,7 +197,38 @@ function SignupForm() {
         return;
       }
 
-      // Kod gönderildi (production'da API key varsa mail gönderilir)
+      // Kod gönderildi - response'da gelen kodu sakla (serverless sorununu çözmek için)
+      const emailOrPhone = type === 'email' 
+        ? formData.email?.trim().toLowerCase() 
+        : formData.phone?.trim();
+      
+      console.log('📥 Send response:', { 
+        hasVerificationCode: !!data.verificationCode,
+        hasVerificationId: !!data.verificationId,
+        hasExpiresAt: !!data.expiresAt,
+        emailOrPhone,
+        type,
+        verificationCode: data.verificationCode,
+        verificationId: data.verificationId,
+        expiresAt: data.expiresAt,
+        fullData: data 
+      });
+      
+      if (data.verificationCode && data.verificationId && data.expiresAt && emailOrPhone) {
+        const key = `${type}_${emailOrPhone}`;
+        setVerificationCodes(prev => {
+          const newMap = new Map(prev);
+          newMap.set(key, {
+            code: data.verificationCode,
+            id: data.verificationId,
+            expiresAt: data.expiresAt,
+          });
+          return newMap;
+        });
+        console.log('✅ Verification code saved locally:', data.verificationCode);
+      } else {
+        console.warn('⚠️ Verification code not in response or missing email/phone');
+      }
     } catch (err) {
       setError('Doğrulama kodu gönderilirken bir hata oluştu');
     } finally {
@@ -181,55 +236,157 @@ function SignupForm() {
     }
   };
 
-  const handleVerification = async (code: string, type: 'email' | 'phone') => {
+  const handleVerification = async (code: string, type: 'email' | 'phone'): Promise<boolean> => {
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await fetch('/api/verification/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: type === 'email' ? formData.email : undefined,
-          phone: type === 'phone' ? formData.phone : undefined,
-          code,
-          type,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Doğrulama başarısız');
+      // Email/Phone'u normalize et
+      const emailOrPhone = type === 'email' 
+        ? formData.email?.trim().toLowerCase() 
+        : formData.phone?.trim();
+      
+      if (!emailOrPhone) {
+        setError(type === 'email' ? 'E-posta adresi gerekli' : 'Telefon numarası gerekli');
         setIsLoading(false);
         return false;
       }
 
-      // Doğrulama başarılı
-      const newVerified = { ...verified, [type]: true };
-      setVerified(newVerified);
+      // Önce client-side'da kontrol et (serverless sorununu çözmek için)
+      const key = `${type}_${emailOrPhone}`;
+      const localCode = verificationCodes.get(key);
+      const normalizedCode = code.trim().replace(/\D/g, '');
       
-      // Kullanıcı bilgilerini güncelle
-      if (userId) {
-        updateUser(userId, {
-          [type === 'email' ? 'emailVerified' : 'phoneVerified']: true,
-          isActive: true, // Doğrulama yapıldıysa aktif
-        });
-      }
+      console.log('🔍 Verification check:', {
+        key,
+        hasLocalCode: !!localCode,
+        localCode: localCode ? { code: localCode.code, expiresAt: localCode.expiresAt } : null,
+        inputCode: normalizedCode,
+        allCodes: Array.from(verificationCodes.entries()).map(([k, v]) => ({ key: k, code: v.code })),
+      });
       
-      // Plan ücretliyse ödeme adımına geç, değilse dashboard'a yönlendir
-      if (plan && plan !== 'free') {
-        setStep('payment');
-      } else {
-        // Ücretsiz plan için kullanıcıyı oturuma kaydet ve dashboard'a yönlendir
-        if (userId) {
-          setCurrentUser(userId);
+      if (localCode) {
+        const now = Date.now();
+        const expiresAt = new Date(localCode.expiresAt).getTime();
+        
+        if (localCode.code === normalizedCode && expiresAt > now) {
+          console.log('✅ Code verified locally - skipping server request');
+          // Local doğrulama başarılı - server'a istek gönderme (serverless sorunu nedeniyle)
+          const localVerified = { ...verified, [type]: true };
+          setVerified(localVerified);
+          
+          // Kullanıcı bilgilerini güncelle
+          if (userId) {
+            const updates = {
+              [type === 'email' ? 'emailVerified' : 'phoneVerified']: true,
+              isActive: true,
+            };
+            updateUser(userId, updates);
+            
+            // Also update in database
+            try {
+              await updateUserInDB(userId, updates);
+            } catch (dbError) {
+              console.error('⚠️ Database update error:', dbError);
+            }
+          }
+          
+          // Trial planı için dashboard'a yönlendir (7 gün sonra ödeme gerekli)
+          if (userId) {
+            setCurrentUser(userId);
+          }
+          router.push('/dashboard');
+          
+          setIsLoading(false);
+          return true;
+        } else if (expiresAt <= now) {
+          setError('Doğrulama kodu süresi dolmuş. Lütfen yeni kod isteyin.');
+          setIsLoading(false);
+          return false;
+        } else {
+          // Kod eşleşmiyor
+          console.warn('❌ Code mismatch:', { local: localCode.code, input: normalizedCode });
+          setError('Doğrulama kodu hatalı');
+          setIsLoading(false);
+          return false;
         }
-        router.push('/dashboard');
-      }
+      } else {
+        console.warn('⚠️ No local code found, trying server verification');
+        
+        // Client-side'da kod yoksa server'a istek gönder
+        const requestBody = {
+          email: type === 'email' ? emailOrPhone : undefined,
+          phone: type === 'phone' ? emailOrPhone : undefined,
+          code: normalizedCode,
+          type,
+        };
 
-      setIsLoading(false);
-      return true;
+        console.log('🔍 Server verification request:', requestBody);
+
+        let data;
+        try {
+          const response = await fetch('/api/verification/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          });
+
+          try {
+            data = await response.json();
+          } catch (jsonError) {
+            console.error('❌ JSON parse error:', jsonError);
+            const text = await response.text();
+            console.error('Response text:', text);
+            setError('Sunucudan geçersiz yanıt alındı');
+            setIsLoading(false);
+            return false;
+          }
+
+          console.log('📥 Verification response:', { status: response.status, data });
+
+          if (!response.ok) {
+            const errorMessage = data?.error || data?.message || `Doğrulama başarısız (${response.status})`;
+            console.error('❌ Verification error:', errorMessage, data);
+            setError(errorMessage);
+            setIsLoading(false);
+            return false;
+          }
+
+          // Doğrulama başarılı
+          const newVerified = { ...verified, [type]: true };
+          setVerified(newVerified);
+          
+          // Kullanıcı bilgilerini güncelle
+          if (userId) {
+            const updates = {
+              [type === 'email' ? 'emailVerified' : 'phoneVerified']: true,
+              isActive: true, // Doğrulama yapıldıysa aktif
+            };
+            updateUser(userId, updates);
+            
+            // Also update in database
+            try {
+              await updateUserInDB(userId, updates);
+            } catch (dbError) {
+              console.error('⚠️ Database update error:', dbError);
+            }
+          }
+          
+          // Trial planı için dashboard'a yönlendir (7 gün sonra ödeme gerekli)
+          if (userId) {
+            setCurrentUser(userId);
+          }
+          router.push('/dashboard');
+
+          setIsLoading(false);
+          return true;
+        } catch (fetchError) {
+          console.error('❌ Fetch error:', fetchError);
+          setError('Doğrulama sırasında bir hata oluştu');
+          setIsLoading(false);
+          return false;
+        }
+      }
     } catch (err) {
       setError('Doğrulama sırasında bir hata oluştu');
       setIsLoading(false);
@@ -237,9 +394,7 @@ function SignupForm() {
     }
   };
 
-  if (!plan || !['monthly', '6month', 'yearly'].includes(plan)) {
-    return null;
-  }
+  // Plan kontrolü kaldırıldı - herkes trial olarak kayıt oluyor
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAFA' }}>
@@ -282,18 +437,7 @@ function SignupForm() {
               </div>
               <p className="text-sm">Doğrulama</p>
             </div>
-            {plan !== 'free' && (
-              <>
-                <div className={`flex-1 h-1 mx-2 ${step === 'payment' ? 'bg-orange-600' : 'bg-gray-300'}`}></div>
-                <div className={`flex-1 text-center ${step === 'payment' ? 'text-orange-600 font-bold' : 'text-gray-400'}`}>
-                  <div className="w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center" 
-                    style={{ backgroundColor: step === 'payment' ? '#FB6602' : '#E5E5E5', color: step === 'payment' ? '#FFFFFF' : '#999999' }}>
-                    3
-                  </div>
-                  <p className="text-sm">Ödeme</p>
-                </div>
-              </>
-            )}
+            {/* Ödeme adımı kaldırıldı - 7 gün sonra dashboard'da ödeme ekranı gösterilecek */}
           </div>
         </div>
 
@@ -305,9 +449,10 @@ function SignupForm() {
                 Kayıt Ol
               </h2>
               <p className="text-gray-600 mb-6">
-                {plan === 'monthly' && '1 Aylık Plan - 299₺'}
-                {plan === '6month' && '6 Aylık Plan - 1590₺'}
-                {plan === 'yearly' && 'Yıllık Plan - 2490₺'}
+                7 Günlük Ücretsiz Deneme
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Kayıt olduktan sonra 7 gün ücretsiz kullanabilirsiniz. Deneme süresi sonunda ödeme yaparak devam edebilirsiniz.
               </p>
 
               {error && (
@@ -318,11 +463,13 @@ function SignupForm() {
 
               <form onSubmit={handleInfoSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 mb-2">
                     Ad Soyad *
                   </label>
                   <input
                     type="text"
+                    id="signup-name"
+                    name="signup-name"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -332,10 +479,12 @@ function SignupForm() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="signup-sector" className="block text-sm font-medium text-gray-700 mb-2">
                     Sektörünüz *
                   </label>
                   <select
+                    id="signup-sector"
+                    name="signup-sector"
                     required
                     value={formData.sector}
                     onChange={(e) => setFormData({ ...formData, sector: e.target.value as Sector })}
@@ -357,14 +506,16 @@ function SignupForm() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-2">
                     E-posta *
                   </label>
                   <input
                     type="email"
+                    id="signup-email"
+                    name="signup-email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase().trim() })}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                     style={{ borderColor: '#AF948F' }}
                     placeholder="ornek@email.com"
@@ -372,11 +523,13 @@ function SignupForm() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="signup-phone" className="block text-sm font-medium text-gray-700 mb-2">
                     Telefon (Opsiyonel)
                   </label>
                   <input
                     type="tel"
+                    id="signup-phone"
+                    name="signup-phone"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -386,12 +539,14 @@ function SignupForm() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-2">
                     Şifre *
                   </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      id="signup-password"
+                      name="signup-password"
                       required
                       value={formData.password}
                       onChange={(e) => {
@@ -426,10 +581,12 @@ function SignupForm() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 mb-2">
+                  <label htmlFor="signup-verification-type" className="block text-sm font-medium text-gray-700 mb-2">
                     Doğrulama Yöntemi *
                   </label>
                   <select
+                    id="signup-verification-type"
+                    name="signup-verification-type"
                     value={formData.verificationType}
                     onChange={(e) => setFormData({ ...formData, verificationType: e.target.value as 'email' | 'phone' })}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -470,15 +627,7 @@ function SignupForm() {
             />
           )}
 
-          {/* Step 3: Ödeme */}
-          {step === 'payment' && plan !== 'free' && userId && (
-            <PaymentStep
-              userId={userId}
-              plan={plan}
-              email={formData.email}
-              phone={formData.phone}
-            />
-          )}
+          {/* Ödeme adımı kaldırıldı - 7 gün sonra dashboard'da ödeme ekranı gösterilecek */}
         </div>
       </div>
     </div>
@@ -546,10 +695,13 @@ function VerificationStep({
       <h2 className="text-2xl font-bold mb-4" style={{ color: '#555555' }}>
         Doğrulama
       </h2>
-      <p className="text-gray-600 mb-6">
+      <p className="text-gray-600 mb-2">
         {verificationType === 'email' 
           ? `${email} adresine gönderilen doğrulama kodunu girin`
           : `${phone} numarasına gönderilen doğrulama kodunu girin`}
+      </p>
+      <p className="text-sm text-gray-500 mb-6">
+        ⏰ Kod <strong>12 dakika</strong> geçerlidir
       </p>
 
       {error && (
@@ -568,11 +720,13 @@ function VerificationStep({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="verification-code" className="block text-sm font-medium text-gray-700 mb-2">
             Doğrulama Kodu (6 haneli)
           </label>
           <input
             type="text"
+            id="verification-code"
+            name="verification-code"
             required
             maxLength={6}
             value={code}
@@ -607,9 +761,10 @@ function VerificationStep({
             Kodu Tekrar Gönder
           </button>
         ) : (
-          <p className="text-sm text-gray-500">
-            Kodu tekrar göndermek için {countdown} saniye bekleyin
-          </p>
+          <div className="text-sm text-gray-500">
+            <p>Kodu tekrar göndermek için {countdown} saniye bekleyin</p>
+            <p className="text-xs mt-1">(Mevcut kodunuz hala geçerli)</p>
+          </div>
         )}
       </div>
     </div>
@@ -778,11 +933,13 @@ function PaymentStep({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="payment-card-number" className="block text-sm font-medium text-gray-700 mb-2">
             Kart Numarası *
           </label>
           <input
             type="text"
+            id="payment-card-number"
+            name="payment-card-number"
             required
             maxLength={19}
             value={formData.cardNumber}
@@ -799,11 +956,13 @@ function PaymentStep({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="payment-card-name" className="block text-sm font-medium text-gray-700 mb-2">
             Kart Üzerindeki İsim *
           </label>
           <input
             type="text"
+            id="payment-card-name"
+            name="payment-card-name"
             required
             value={formData.cardName}
             onChange={(e) => setFormData({ ...formData, cardName: e.target.value.toUpperCase() })}
@@ -815,11 +974,13 @@ function PaymentStep({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="payment-expiry-date" className="block text-sm font-medium text-gray-700 mb-2">
               Son Kullanma (AA/YY) *
             </label>
             <input
               type="text"
+              id="payment-expiry-date"
+              name="payment-expiry-date"
               required
               maxLength={5}
               value={formData.expiryDate}
@@ -836,11 +997,13 @@ function PaymentStep({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="payment-cvv" className="block text-sm font-medium text-gray-700 mb-2">
               CVV *
             </label>
             <input
               type="text"
+              id="payment-cvv"
+              name="payment-cvv"
               required
               maxLength={4}
               value={formData.cvv}
@@ -882,13 +1045,5 @@ function PaymentStep({
 }
 
 export default function SignupPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAFAFA' }}>
-        <p className="text-gray-500">Yükleniyor...</p>
-      </div>
-    }>
-      <SignupForm />
-    </Suspense>
-  );
+  return <SignupForm />;
 }

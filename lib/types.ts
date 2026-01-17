@@ -62,10 +62,10 @@ export interface User {
   phone?: string;
   name?: string;
   password?: string; // Şifre (production'da hash edilmeli)
-  plan: 'free' | 'monthly' | '6month' | 'yearly';
+  plan: 'free' | 'trial' | 'monthly' | '6month' | 'yearly';
   isActive: boolean;
   createdAt: string;
-  expiresAt?: string; // Plan bitiş tarihi
+  expiresAt?: string; // Plan bitiş tarihi (trial için 7 gün sonra)
   storeSlug?: string; // Kullanıcının mağaza slug'ı
   sector?: Sector; // Kullanıcının sektörü (Bakkal, Tekel, Manav, vb.)
   emailVerified?: boolean; // Email doğrulandı mı

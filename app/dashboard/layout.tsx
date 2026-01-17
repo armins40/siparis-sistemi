@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { getCurrentUser, logout, checkUserSubscription } from '@/lib/auth';
+import { getCurrentUser, getCurrentUserAsync, logout, checkUserSubscription } from '@/lib/auth';
 import type { User } from '@/lib/types';
 
 const menuItems = [
@@ -28,27 +28,60 @@ export default function DashboardLayout({
     hasActiveSubscription: boolean;
     daysRemaining: number;
   } | null>(null);
+  // Mobil için sidebar açık/kapalı durumu
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     
     if (typeof window !== 'undefined') {
-      const currentUser = getCurrentUser();
-      
-      if (!currentUser || !currentUser.isActive) {
-        router.replace('/login');
-        return;
+      // Önce localStorage'dan hızlı kontrol (ilk render için)
+      const localUser = getCurrentUser();
+      if (localUser && localUser.isActive) {
+        setUser(localUser);
       }
       
-      setUser(currentUser);
-      
-      // Abonelik kontrolü (ücretsiz plan hariç)
-      if (currentUser.plan !== 'free') {
-        const subStatus = checkUserSubscription(currentUser.id);
-        setSubscriptionStatus(subStatus);
+      // Sonra database'den kontrol et (async)
+      getCurrentUserAsync().then((currentUser) => {
+        if (!currentUser || !currentUser.isActive) {
+          router.replace('/login');
+          return;
+        }
         
-        // Abonelik süresi dolmuşsa uyarı göster (yönlendirme yapmıyoruz, sadece uyarı)
-      }
+        setUser(currentUser);
+        
+        // Trial planı için expiresAt kontrolü (tüm kullanıcılar trial ile başlıyor)
+        if (currentUser.plan === 'trial' && currentUser.expiresAt) {
+          const now = new Date();
+          const expiresAt = new Date(currentUser.expiresAt);
+          const daysRemaining = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const isExpired = expiresAt <= now;
+          
+          setSubscriptionStatus({
+            hasActiveSubscription: !isExpired,
+            daysRemaining: Math.max(0, daysRemaining),
+          });
+          
+          // Süre dolmuşsa ödeme sayfasına yönlendir (zorunlu)
+          if (isExpired && pathname !== '/dashboard/payment') {
+            router.replace('/dashboard/payment');
+            return; // Ödeme sayfasına yönlendirildi, dashboard'a erişim yok
+          }
+        } else if (currentUser.plan !== 'free') {
+          // Diğer planlar için subscription kontrolü
+          const subStatus = checkUserSubscription(currentUser.id);
+          setSubscriptionStatus(subStatus);
+        }
+      }).catch((error) => {
+        console.error('Error loading user:', error);
+        // Hata durumunda localStorage'dan oku
+        const fallbackUser = getCurrentUser();
+        if (!fallbackUser || !fallbackUser.isActive) {
+          router.replace('/login');
+        } else {
+          setUser(fallbackUser);
+        }
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -76,13 +109,54 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-gray-200">
+      {/* Mobil Header - Hamburger Menu */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-50">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-2 rounded-lg hover:bg-gray-100"
+          aria-label="Menu"
+        >
+          <span className="text-2xl">☰</span>
+        </button>
+        <Link href="/dashboard" className="text-xl font-bold text-gray-900">
+          Siparis
+        </Link>
+        <div className="w-10" /> {/* Spacer for centering */}
+      </div>
+
+      {/* Mobil Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Mobilde slide-in, desktop'ta fixed */}
+      <aside
+        className={`fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col z-40 transform transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0`}
+      >
+        {/* Logo - Desktop'ta göster */}
+        <div className="h-16 hidden lg:flex items-center px-6 border-b border-gray-200">
           <Link href="/dashboard" className="text-xl font-bold text-gray-900">
             Siparis
           </Link>
+        </div>
+        
+        {/* Mobil Logo ve Kapat Butonu */}
+        <div className="h-16 lg:hidden flex items-center justify-between px-6 border-b border-gray-200">
+          <Link href="/dashboard" className="text-xl font-bold text-gray-900">
+            Siparis
+          </Link>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-2 rounded-lg hover:bg-gray-100"
+            aria-label="Kapat"
+          >
+            <span className="text-2xl">×</span>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -115,19 +189,22 @@ export default function DashboardLayout({
               color: subscriptionStatus.hasActiveSubscription ? '#166534' : '#854D0E'
             }}>
               <div className="font-medium">
-                {subscriptionStatus.hasActiveSubscription ? '✅ Aktif' : '⚠️ Süresi Dolmuş'}
+                {user.plan === 'trial' && subscriptionStatus.hasActiveSubscription && '🎁 Deneme Sürümü'}
+                {user.plan === 'trial' && !subscriptionStatus.hasActiveSubscription && '⚠️ Deneme Süresi Doldu'}
+                {user.plan !== 'trial' && subscriptionStatus.hasActiveSubscription && '✅ Aktif'}
+                {user.plan !== 'trial' && !subscriptionStatus.hasActiveSubscription && '⚠️ Süresi Dolmuş'}
               </div>
               {subscriptionStatus.hasActiveSubscription && subscriptionStatus.daysRemaining > 0 && (
                 <div className="text-xs mt-1">
-                  {subscriptionStatus.daysRemaining} gün kaldı
+                  {user.plan === 'trial' ? `${subscriptionStatus.daysRemaining} gün deneme kaldı` : `${subscriptionStatus.daysRemaining} gün kaldı`}
                 </div>
               )}
               {!subscriptionStatus.hasActiveSubscription && (
                 <Link
-                  href={`/signup?plan=${user.plan}`}
+                  href={user.plan === 'trial' ? '/dashboard/payment' : `/signup?plan=${user.plan}`}
                   className="text-xs underline mt-1 block"
                 >
-                  Yenile
+                  {user.plan === 'trial' ? 'Ödeme Yap' : 'Yenile'}
                 </Link>
               )}
             </div>
@@ -143,9 +220,9 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="ml-64 min-h-screen">
-        <div className="p-8">{children}</div>
+      {/* Main Content - Mobilde full width, desktop'ta margin */}
+      <main className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
+        <div className="p-4 lg:p-8">{children}</div>
       </main>
     </div>
   );

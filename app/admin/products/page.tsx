@@ -162,14 +162,24 @@ export default function AdminProductsPage() {
       {/* Search and Filter */}
       <div className="bg-white rounded-xl shadow-lg p-4 space-y-4">
         <div className="flex gap-4">
+          <label htmlFor="admin-product-search" className="sr-only">
+            Ürün ara
+          </label>
           <input
             type="text"
+            id="admin-product-search"
+            name="admin-product-search"
             placeholder="Ürün adı veya kategori ile ara..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
+          <label htmlFor="admin-product-sector-filter" className="sr-only">
+            Sektör filtresi
+          </label>
           <select
+            id="admin-product-sector-filter"
+            name="admin-product-sector-filter"
             value={selectedSector}
             onChange={(e) => setSelectedSector(e.target.value as Sector | 'all')}
             className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -301,11 +311,13 @@ export default function AdminProductsPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="admin-product-name" className="block text-sm font-medium text-gray-700 mb-2">
                   Ürün Adı *
                 </label>
                 <input
                   type="text"
+                  id="admin-product-name"
+                  name="admin-product-name"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -314,10 +326,12 @@ export default function AdminProductsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="admin-product-sector" className="block text-sm font-medium text-gray-700 mb-2">
                   Sektör *
                 </label>
                 <select
+                  id="admin-product-sector"
+                  name="admin-product-sector"
                   required
                   value={formData.sector}
                   onChange={(e) => setFormData({ ...formData, sector: e.target.value as Sector })}
@@ -337,11 +351,13 @@ export default function AdminProductsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="admin-product-price" className="block text-sm font-medium text-gray-700 mb-2">
                     Fiyat (₺) *
                   </label>
                   <input
                     type="number"
+                    id="admin-product-price"
+                    name="admin-product-price"
                     step="0.01"
                     min="0"
                     required
@@ -351,11 +367,13 @@ export default function AdminProductsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="admin-product-category" className="block text-sm font-medium text-gray-700 mb-2">
                     Kategori *
                   </label>
                   <input
                     type="text"
+                    id="admin-product-category"
+                    name="admin-product-category"
                     list="categories"
                     required
                     value={formData.category}
@@ -372,11 +390,13 @@ export default function AdminProductsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="admin-product-stock" className="block text-sm font-medium text-gray-700 mb-2">
                     Stok (Opsiyonel)
                   </label>
                   <input
                     type="number"
+                    id="admin-product-stock"
+                    name="admin-product-stock"
                     min="0"
                     value={formData.stock}
                     onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
@@ -384,10 +404,12 @@ export default function AdminProductsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="admin-product-unit" className="block text-sm font-medium text-gray-700 mb-2">
                     Birim
                   </label>
                   <select
+                    id="admin-product-unit"
+                    name="admin-product-unit"
                     value={formData.unit}
                     onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -402,11 +424,13 @@ export default function AdminProductsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="admin-product-image" className="block text-sm font-medium text-gray-700 mb-2">
                   Ürün Görseli URL (Opsiyonel)
                 </label>
                 <input
                   type="url"
+                  id="admin-product-image"
+                  name="admin-product-image"
                   value={formData.image}
                   onChange={(e) => setFormData({ ...formData, image: e.target.value })}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"

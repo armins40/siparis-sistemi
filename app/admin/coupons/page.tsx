@@ -273,11 +273,13 @@ export default function AdminCouponsPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="coupon-code" className="block text-sm font-medium text-gray-700 mb-2">
                   Kupon Kodu *
                 </label>
                 <input
                   type="text"
+                  id="coupon-code"
+                  name="coupon-code"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -288,10 +290,12 @@ export default function AdminCouponsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="coupon-discount-type" className="block text-sm font-medium text-gray-700 mb-2">
                   İndirim Tipi *
                 </label>
-                  <select
+                <select
+                  id="coupon-discount-type"
+                  name="coupon-discount-type"
                   value={formData.discountType}
                   onChange={(e) => setFormData({ ...formData, discountType: e.target.value as Coupon['discountType'] })}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -302,11 +306,13 @@ export default function AdminCouponsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="coupon-discount-value" className="block text-sm font-medium text-gray-700 mb-2">
                   İndirim Değeri *
                 </label>
                 <input
                   type="number"
+                  id="coupon-discount-value"
+                  name="coupon-discount-value"
                   min="0"
                   max={formData.discountType === 'percentage' ? '100' : undefined}
                   step={formData.discountType === 'percentage' ? '1' : '0.01'}
@@ -319,11 +325,13 @@ export default function AdminCouponsPage() {
 
               {formData.discountType === 'percentage' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="coupon-max-discount" className="block text-sm font-medium text-gray-700 mb-2">
                     Maksimum İndirim (₺) (Opsiyonel)
                   </label>
                   <input
                     type="number"
+                    id="coupon-max-discount"
+                    name="coupon-max-discount"
                     min="0"
                     step="0.01"
                     value={formData.maxDiscount}
@@ -335,11 +343,13 @@ export default function AdminCouponsPage() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="coupon-min-purchase" className="block text-sm font-medium text-gray-700 mb-2">
                   Minimum Alışveriş Tutarı (₺) (Opsiyonel)
                 </label>
                 <input
                   type="number"
+                  id="coupon-min-purchase"
+                  name="coupon-min-purchase"
                   min="0"
                   step="0.01"
                   value={formData.minPurchase}
@@ -350,11 +360,13 @@ export default function AdminCouponsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="coupon-usage-limit" className="block text-sm font-medium text-gray-700 mb-2">
                   Kullanım Limiti (Opsiyonel)
                 </label>
                 <input
                   type="number"
+                  id="coupon-usage-limit"
+                  name="coupon-usage-limit"
                   min="0"
                   value={formData.usageLimit}
                   onChange={(e) => setFormData({ ...formData, usageLimit: parseInt(e.target.value) || 0 })}
@@ -365,11 +377,13 @@ export default function AdminCouponsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="coupon-valid-from" className="block text-sm font-medium text-gray-700 mb-2">
                     Başlangıç Tarihi *
                   </label>
                   <input
                     type="date"
+                    id="coupon-valid-from"
+                    name="coupon-valid-from"
                     value={formData.validFrom}
                     onChange={(e) => setFormData({ ...formData, validFrom: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -377,11 +391,13 @@ export default function AdminCouponsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="coupon-valid-until" className="block text-sm font-medium text-gray-700 mb-2">
                     Bitiş Tarihi *
                   </label>
                   <input
                     type="date"
+                    id="coupon-valid-until"
+                    name="coupon-valid-until"
                     value={formData.validUntil}
                     onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -393,12 +409,13 @@ export default function AdminCouponsPage() {
               <div className="flex items-center">
                 <input
                   type="checkbox"
-                  id="isActive"
+                  id="coupon-isActive"
+                  name="coupon-isActive"
                   checked={formData.isActive}
                   onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                   className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
                 />
-                <label htmlFor="isActive" className="ml-2 text-sm font-medium text-gray-700">
+                <label htmlFor="coupon-isActive" className="ml-2 text-sm font-medium text-gray-700">
                   Aktif
                 </label>
               </div>

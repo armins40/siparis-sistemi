@@ -58,12 +58,20 @@ export function getUserById(id: string): User | null {
 
 export function getUserByEmail(email: string): User | null {
   const users = getUsersArray();
-  return users.find(u => u.email?.toLowerCase() === email.toLowerCase()) || null;
+  const normalizedEmail = email.trim().toLowerCase();
+  return users.find(u => u.email?.trim().toLowerCase() === normalizedEmail) || null;
 }
 
 export function getUserByPhone(phone: string): User | null {
   const users = getUsersArray();
-  return users.find(u => u.phone === phone) || null;
+  const normalizedPhone = phone.trim();
+  return users.find(u => u.phone?.trim() === normalizedPhone) || null;
+}
+
+export function getUserByStoreSlug(storeSlug: string): User | null {
+  const users = getUsersArray();
+  const normalizedSlug = storeSlug.trim().toLowerCase();
+  return users.find(u => u.storeSlug?.trim().toLowerCase() === normalizedSlug) || null;
 }
 
 export function createUser(user: Omit<User, 'id' | 'createdAt'>): User {

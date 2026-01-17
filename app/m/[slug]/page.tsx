@@ -6,7 +6,12 @@ import { getTheme } from '@/lib/themes';
 import { getThemeId } from '@/lib/store';
 import { getProductsByCategory, getPublishedProducts, getAllProducts } from '@/lib/products';
 import { getAllCategories } from '@/lib/categories';
-import type { Product } from '@/lib/types';
+import { getUserByStoreSlug } from '@/lib/admin';
+// Database imports
+import { getUserByStoreSlugFromDB } from '@/lib/db/users';
+import { getStoreFromDB } from '@/lib/db/stores';
+import { getProductsByStoreSlugFromDB } from '@/lib/db/products';
+import type { Product, Store } from '@/lib/types';
 
 interface MenuPageProps {
   params: Promise<{ slug?: string }>;
@@ -20,7 +25,7 @@ export default function MenuPage({ params }: MenuPageProps) {
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Tümü');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [store, setStore] = useState<ReturnType<typeof getStore> | null>(null);
+  const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState<Map<string, { quantity: number; unit?: string }>>(new Map());
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -36,39 +41,131 @@ export default function MenuPage({ params }: MenuPageProps) {
       return;
     }
 
-    // Load products
-    const publishedProducts = getPublishedProducts();
-    const allProductsList = getAllProducts();
-    const useAllProducts = publishedProducts.length === 0 && allProductsList.length > 0;
-    const allProducts = useAllProducts ? allProductsList : publishedProducts;
-
-    // Load categories from both category management and products
-    const managedCategories = getAllCategories();
-    const productCategories = Array.from(new Set(allProducts.map(p => p.category).filter(Boolean)));
-    const categories = Array.from(new Set([
-      ...managedCategories.map(c => c.name),
-      ...productCategories
-    ])).sort();
-
-    // Try to find store
-    const storeData = getStore();
-    if (storeData) {
-      if (!storeData.themeId) {
-        storeData.themeId = getThemeId();
+    // Database'den veri yükleme fonksiyonu
+    const loadMenuData = async () => {
+      try {
+        console.log('🔍 Loading menu data for slug:', slug);
+        
+        let storeData: Store | null = null;
+        let allProducts: Product[] = [];
+        
+        // ÖNCE: Direkt slug ile ürünleri ara (en güvenilir yöntem)
+        console.log('🔍 Step 1: Searching products directly by store_slug:', slug);
+        console.log('📱 Device: Mobile/Desktop - URL:', typeof window !== 'undefined' ? window.location.href : 'SSR');
+        const directProducts = await getProductsByStoreSlugFromDB(slug);
+        console.log('📦 Direct products by slug:', directProducts.length);
+        if (directProducts.length === 0) {
+          console.warn('⚠️ WARNING: No products found with store_slug:', slug);
+          console.warn('💡 Tip: Check if products in database have correct store_slug value');
+        }
+        
+        if (directProducts.length > 0) {
+          // Ürünler bulundu, store'u da al
+          allProducts = directProducts;
+          storeData = await getStoreFromDB(slug);
+          console.log('✅ Found products and store directly by slug');
+        } else {
+          // Ürünler bulunamadı, user'ı kontrol et
+          console.log('⚠️ No products found by slug, checking user...');
+          const userFromDB = await getUserByStoreSlugFromDB(slug);
+          console.log('👤 User from DB:', userFromDB ? 'Found' : 'Not found');
+          
+          if (userFromDB && userFromDB.storeSlug) {
+            // User found, try to get products by user's storeSlug
+            console.log('✅ User found, loading store and products for:', userFromDB.storeSlug);
+            storeData = await getStoreFromDB(userFromDB.storeSlug);
+            allProducts = await getProductsByStoreSlugFromDB(userFromDB.storeSlug);
+            console.log('📦 Products from DB by user storeSlug:', allProducts.length);
+          }
+          
+          // Hala ürün yoksa localStorage'a düş
+          if (allProducts.length === 0) {
+            console.log('📱 Falling back to localStorage...');
+            const user = getUserByStoreSlug(slug);
+            const allProductsList = getAllProducts();
+            console.log('📦 Total products in localStorage:', allProductsList.length);
+            
+            // Slug ile eşleşen ürünleri bul (userId === slug VE isPublished === true)
+            const slugProducts = allProductsList.filter(p => {
+              if (p.userId === slug && p.isPublished) return true;
+              return false;
+            });
+            console.log('📦 Products matching slug in localStorage:', slugProducts.length);
+            
+            if (user && user.sector) {
+              const userProducts = allProductsList.filter(p => {
+                if ((p.userId === user.id || p.userId === user.storeSlug) && p.isPublished) return true;
+                if (p.createdBy === 'admin' && p.sector === user.sector && p.isPublished) return true;
+                return false;
+              });
+              allProducts = userProducts.length > 0 ? userProducts : slugProducts;
+            } else {
+              allProducts = slugProducts;
+            }
+            
+            // Store from localStorage
+            const localStore = getStore();
+            if (localStore && localStore.slug === slug) {
+              storeData = localStore;
+            }
+          }
+        }
+        
+        // Store fallback
+        if (!storeData) {
+          storeData = {
+            slug: slug,
+            name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+            themeId: getThemeId(),
+          };
+        }
+        
+        // Categories
+        const managedCategories = getAllCategories();
+        const productCategories = Array.from(new Set(allProducts.map(p => p.category).filter(Boolean)));
+        const categories = Array.from(new Set([
+          ...managedCategories.map(c => c.name),
+          ...productCategories
+        ])).sort();
+        
+        if (!storeData.themeId) {
+          storeData.themeId = getThemeId();
+        }
+        
+        console.log('✅ Final products count:', allProducts.length);
+        console.log('✅ Store data:', storeData ? storeData.name : 'Not found');
+        console.log('✅ Products sample:', allProducts.length > 0 ? {
+          id: allProducts[0].id,
+          name: allProducts[0].name,
+          isPublished: allProducts[0].isPublished,
+          storeSlug: (allProducts[0] as any).storeSlug || allProducts[0].userId
+        } : 'No products');
+        
+        setStore(storeData);
+        setProducts(allProducts);
+        setAllCategories(categories);
+        setLoading(false);
+      } catch (error) {
+        console.error('❌ Error loading menu data from DB:', error);
+        // Fallback to localStorage
+        const user = getUserByStoreSlug(slug);
+        const allProductsList = getAllProducts();
+        const slugProducts = allProductsList.filter(p => p.userId === slug && p.isPublished);
+        const localStore = getStore();
+        
+        setStore(localStore || {
+          slug: slug,
+          name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          themeId: getThemeId(),
+        });
+        setProducts(slugProducts);
+        setAllCategories([]);
+        setLoading(false);
       }
-      setStore(storeData);
-    } else if (allProducts.length > 0) {
-      const defaultStore = {
-        slug: slug,
-        name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-        themeId: getThemeId(),
-      };
-      setStore(defaultStore);
-    }
+    };
 
-    setProducts(allProducts);
-    setAllCategories(categories);
-    setLoading(false);
+    // Database'den veri yükle (tüm cihazlardan erişilebilir)
+    loadMenuData();
   }, [slug]);
 
   const addProduct = (product: Product, increment: number = 1) => {
@@ -222,19 +319,23 @@ export default function MenuPage({ params }: MenuPageProps) {
   }
 
   if (!store) {
+    // Store bulunamadıysa, slug'dan default store oluştur
+    const defaultStore: Store = {
+      slug: slug,
+      name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+      themeId: getThemeId(),
+    };
+    setStore(defaultStore);
     return (
       <div
         className="min-h-screen flex items-center justify-center px-4"
         style={{ backgroundColor: theme.background }}
       >
         <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">🔍</div>
+          <div className="text-6xl mb-4">⏳</div>
           <h2 className="text-2xl font-bold mb-2" style={{ color: theme.text }}>
-            Mağaza bulunamadı
+            Yükleniyor...
           </h2>
-          <p style={{ color: theme.text, opacity: 0.7 }}>
-            Aradığınız mağaza mevcut değil veya menü henüz hazırlanmamış.
-          </p>
         </div>
       </div>
     );
@@ -339,8 +440,13 @@ export default function MenuPage({ params }: MenuPageProps) {
       {/* Search Bar */}
       <div className="max-w-4xl mx-auto px-4 -mt-4 mb-4">
         <div className="bg-white rounded-xl shadow-lg p-4">
+          <label htmlFor="menu-search" className="sr-only">
+            Ürün ara
+          </label>
           <input
             type="text"
+            id="menu-search"
+            name="menu-search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Ürün ara..."
@@ -397,6 +503,17 @@ export default function MenuPage({ params }: MenuPageProps) {
             <p style={{ color: theme.text, opacity: 0.7 }}>
               {searchQuery ? 'Arama sonucu bulunamadı' : 'Bu kategoride ürün bulunmamaktadır'}
             </p>
+            {products.length === 0 && (
+              <div className="mt-4 p-4 bg-yellow-50 rounded-lg text-left max-w-md mx-auto">
+                <p className="text-sm font-semibold text-yellow-800 mb-2">🔍 Debug Bilgisi:</p>
+                <p className="text-xs text-yellow-700">Toplam ürün: {products.length}</p>
+                <p className="text-xs text-yellow-700">Slug: {slug}</p>
+                <p className="text-xs text-yellow-700">Store: {store?.name || 'Bulunamadı'}</p>
+                <p className="text-xs text-yellow-700 mt-2">
+                  💡 Console'da "📦 Direct products by slug:" mesajını kontrol edin
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 pb-6">
@@ -558,10 +675,12 @@ export default function MenuPage({ params }: MenuPageProps) {
 
             {/* Address Input */}
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
+              <label htmlFor="order-address" className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
                 Adres Açıklama
               </label>
               <textarea
+                id="order-address"
+                name="order-address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={4}
@@ -577,7 +696,7 @@ export default function MenuPage({ params }: MenuPageProps) {
 
             {/* Location Section */}
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
+              <label htmlFor="location-share" className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
                 Konum Paylaş
               </label>
               {!location ? (

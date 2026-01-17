@@ -9,6 +9,13 @@ import {
   toggleProductPublish,
   getUserProducts 
 } from '@/lib/products';
+// Database imports
+import { 
+  getProductsByUserIdFromDB,
+  createProductInDB,
+  updateProductInDB,
+  deleteProductFromDB,
+} from '@/lib/db/products';
 import { getAllCategories } from '@/lib/categories';
 import { getStore } from '@/lib/store';
 import { getSectorLabel, getSectorIcon } from '@/lib/sectors';
@@ -63,13 +70,13 @@ export default function ProductsPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const store = getStore();
     const userSector = store?.sector;
     const userId = store?.slug;
     
-    if (!userSector) {
+    if (!userSector || !userId) {
       alert('Lütfen önce Mağaza Ayarları\'ndan sektörünüzü seçin!');
       return;
     }
@@ -86,35 +93,107 @@ export default function ProductsPage() {
       userId: userId, // Kullanıcının store slug'ı
     };
     
-    if (editingProduct) {
-      updateProduct(editingProduct.id, {
-        ...productData,
-        isPublished: editingProduct.isPublished,
-      });
-    } else {
-      createProduct({
-        ...productData,
-        isPublished: false,
-      });
+    try {
+      if (editingProduct) {
+        // Update product
+        const updatedProduct = {
+          ...editingProduct,
+          ...productData,
+        };
+        
+        // Try database first
+        const dbSuccess = await updateProductInDB(updatedProduct);
+        if (!dbSuccess) {
+          console.error('❌ Database update failed');
+          alert('⚠️ Ürün database\'de güncellenemedi. Lütfen database bağlantınızı kontrol edin.');
+          // Still update localStorage as backup
+          updateProduct(editingProduct.id, {
+            ...productData,
+            isPublished: editingProduct.isPublished,
+          });
+        } else {
+          console.log('✅ Product updated in database');
+        }
+      } else {
+        // Create product
+        const newProduct = {
+          id: `product_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          ...productData,
+          isPublished: true, // Default: aktif (menüde görünsün)
+          createdAt: new Date().toISOString(),
+        };
+        
+        console.log('📦 Creating product:', {
+          name: newProduct.name,
+          storeSlug: userId,
+          userId: newProduct.userId,
+          isPublished: newProduct.isPublished
+        });
+        
+        // Try database first
+        const dbSuccess = await createProductInDB(newProduct, userId);
+        if (!dbSuccess) {
+          console.error('❌ Database save failed - product not saved');
+          // Check if POSTGRES_URL is missing
+          const hasDbUrl = typeof window === 'undefined' ? !!process.env.POSTGRES_URL : false;
+          if (!hasDbUrl) {
+            alert('⚠️ Database bağlantısı yapılandırılmamış.\n\nVercel Dashboard > Settings > Environment Variables\'dan POSTGRES_URL ekleyin.\n\nÜrün localStorage\'a kaydedildi (mobilde görünmeyebilir).');
+          } else {
+            alert('⚠️ Ürün database\'e kaydedilemedi. Console\'da hata detaylarını kontrol edin.\n\nÜrün localStorage\'a kaydedildi (mobilde görünmeyebilir).');
+          }
+          // Still save to localStorage as backup
+          createProduct({
+            ...productData,
+            isPublished: true, // Menüde görünsün
+          });
+        } else {
+          console.log('✅ Product saved to database');
+          // Also save to localStorage for backward compatibility
+          createProduct({
+            ...productData,
+            isPublished: true,
+          });
+        }
+      }
+      
+      setFormData({ name: '', price: '', category: '', image: '', stock: '', unit: 'kg' });
+      setImageFile(null);
+      setImagePreview('');
+      setShowForm(false);
+      setEditingProduct(null);
+      
+      // Reload products
+      if (userId) {
+        try {
+          const dbProducts = await getProductsByUserIdFromDB(userId);
+          if (dbProducts.length > 0) {
+            setProducts(dbProducts);
+          } else {
+            const updated = getProductsForUser(userSector, userId);
+            setProducts(updated);
+          }
+        } catch (error) {
+          const updated = getProductsForUser(userSector, userId);
+          setProducts(updated);
+        }
+      } else {
+        // No userId, just reload from localStorage
+        const updated = getProductsForUser(userSector, '');
+        setProducts(updated);
+      }
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Ürün kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.');
     }
-    setFormData({ name: '', price: '', category: '', image: '', stock: '', unit: 'kg' });
-    setImageFile(null);
-    setImagePreview('');
-    setShowForm(false);
-    setEditingProduct(null);
-    
-    // Ürünleri yeniden yükle
-    const updated = getProductsForUser(userSector, userId);
-    setProducts(updated);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Görsel dosyası 5MB\'dan küçük olmalıdır');
+    // Check file size (max 10MB for Cloudinary)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Görsel dosyası 10MB\'dan küçük olmalıdır');
       return;
     }
 
@@ -126,13 +205,42 @@ export default function ProductsPage() {
 
     setImageFile(file);
 
+    // Preview için base64 (hızlı görüntüleme)
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
       setImagePreview(base64String);
-      setFormData({ ...formData, image: base64String });
     };
     reader.readAsDataURL(file);
+
+    // Cloudinary'ye yükle
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('folder', 'siparis/products');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.url) {
+        // Cloudinary URL'ini kaydet
+        setFormData({ ...formData, image: data.url });
+        setImagePreview(data.url); // Cloudinary URL'ini preview olarak göster
+      } else {
+        alert(data.error || 'Görsel yüklenirken bir hata oluştu');
+        setImageFile(null);
+        setImagePreview('');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Görsel yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+      setImageFile(null);
+      setImagePreview('');
+    }
   };
 
   const removeImage = () => {
@@ -163,7 +271,7 @@ export default function ProductsPage() {
     setShowForm(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const product = products.find(p => p.id === id);
     // Admin eklediği ürünleri silme (sadece kullanıcının kendi ürünlerini silebilir)
     if (product?.createdBy === 'admin') {
@@ -171,20 +279,50 @@ export default function ProductsPage() {
       return;
     }
     
-    if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
+    if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return;
+    
+    try {
+      // Try database first
+      const dbSuccess = await deleteProductFromDB(id);
+      if (!dbSuccess) {
+        // Fallback to localStorage
+        deleteProduct(id);
+      }
+      
+      // Reload products
       const store = getStore();
       const userSector = store?.sector;
       const userId = store?.slug;
-      
-      deleteProduct(id);
-      const updated = getProductsForUser(userSector!, userId);
-      setProducts(updated);
-      // Update categories
-      const allCategories = getAllCategories();
-      const categoryNames = allCategories.map(c => c.name);
-      const productCategories = Array.from(new Set(updated.map(p => p.category).filter(Boolean)));
-      const allCategoryNames = Array.from(new Set([...categoryNames, ...productCategories]));
-      setCategories(allCategoryNames.sort());
+      if (userSector && userId) {
+        try {
+          const dbProducts = await getProductsByUserIdFromDB(userId);
+          if (dbProducts.length > 0) {
+            setProducts(dbProducts);
+          } else {
+            const updated = getProductsForUser(userSector, userId);
+            setProducts(updated);
+          }
+        } catch (error) {
+          const updated = getProductsForUser(userSector, userId);
+          setProducts(updated);
+        }
+        
+        // Update categories
+        const allCategories = getAllCategories();
+        const categoryNames = allCategories.map(c => c.name);
+        let currentProducts: Product[] = [];
+        try {
+          currentProducts = await getProductsByUserIdFromDB(userId);
+        } catch {
+          currentProducts = getProductsForUser(userSector, userId);
+        }
+        const productCategories = Array.from(new Set(currentProducts.map((p: Product) => p.category).filter(Boolean)));
+        const allCategoryNames = Array.from(new Set([...categoryNames, ...productCategories]));
+        setCategories(allCategoryNames.sort());
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert('Ürün silinirken bir hata oluştu. Lütfen tekrar deneyin.');
     }
   };
 
@@ -218,11 +356,13 @@ export default function ProductsPage() {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="product-name" className="block text-sm font-medium text-gray-700 mb-1">
                   Ürün Adı *
                 </label>
                 <input
                   type="text"
+                  id="product-name"
+                  name="product-name"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -230,11 +370,13 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="product-price" className="block text-sm font-medium text-gray-700 mb-1">
                   Fiyat (₺) *
                 </label>
                 <input
                   type="number"
+                  id="product-price"
+                  name="product-price"
                   step="0.01"
                   required
                   value={formData.price}
@@ -243,11 +385,13 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="product-category" className="block text-sm font-medium text-gray-700 mb-1">
                   Kategori *
                 </label>
                 <input
                   type="text"
+                  id="product-category"
+                  name="product-category"
                   required
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -261,7 +405,7 @@ export default function ProductsPage() {
                 </datalist>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="product-image-input" className="block text-sm font-medium text-gray-700 mb-1">
                   Ürün Görseli
                 </label>
                 <div className="space-y-3">
@@ -311,11 +455,13 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="product-stock" className="block text-sm font-medium text-gray-700 mb-1">
                     Stok (opsiyonel)
                   </label>
                   <input
                     type="number"
+                    id="product-stock"
+                    name="product-stock"
                     step="0.1"
                     value={formData.stock}
                     onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
@@ -324,10 +470,12 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="product-unit" className="block text-sm font-medium text-gray-700 mb-1">
                     Birim
                   </label>
                   <select
+                    id="product-unit"
+                    name="product-unit"
                     value={formData.unit}
                     onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"
@@ -469,13 +617,43 @@ export default function ProductsPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => {
+                        onClick={async () => {
+                          // Toggle publish status
+                          const updatedProduct = { ...product, isPublished: !product.isPublished };
+                          
+                          // Update in database
+                          const dbSuccess = await updateProductInDB(updatedProduct);
+                          if (dbSuccess) {
+                            console.log('✅ Product publish status updated in DB');
+                          } else {
+                            console.error('❌ Failed to update product in DB');
+                          }
+                          
+                          // Also update localStorage
                           toggleProductPublish(product.id);
+                          
+                          // Reload products
                           const store = getStore();
                           const userSector = store?.sector;
                           const userId = store?.slug;
-                          const updated = getProductsForUser(userSector!, userId);
-                          setProducts(updated);
+                          
+                          if (userId) {
+                            try {
+                              const dbProducts = await getProductsByUserIdFromDB(userId);
+                              if (dbProducts.length > 0) {
+                                setProducts(dbProducts);
+                              } else {
+                                const updated = getProductsForUser(userSector!, userId);
+                                setProducts(updated);
+                              }
+                            } catch (error) {
+                              const updated = getProductsForUser(userSector!, userId);
+                              setProducts(updated);
+                            }
+                          } else {
+                            const updated = getProductsForUser(userSector || undefined, '');
+                            setProducts(updated);
+                          }
                         }}
                         className={`flex-1 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
                           product.isPublished

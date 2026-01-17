@@ -97,11 +97,13 @@ export default function CategoriesPage() {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="category-name" className="block text-sm font-medium text-gray-700 mb-1">
                   Kategori Adı *
                 </label>
                 <input
                   type="text"
+                  id="category-name"
+                  name="category-name"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}

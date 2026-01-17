@@ -23,6 +23,8 @@ export default function AdminLayout({
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  // Mobil için sidebar açık/kapalı durumu
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -65,13 +67,54 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white flex flex-col z-40">
-        {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-gray-700">
+      {/* Mobil Header - Hamburger Menu */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-gray-900 border-b border-gray-700 flex items-center justify-between px-4 z-50">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-2 rounded-lg hover:bg-gray-800 text-white"
+          aria-label="Menu"
+        >
+          <span className="text-2xl">☰</span>
+        </button>
+        <Link href="/admin" className="text-xl font-bold text-white">
+          🔐 Admin
+        </Link>
+        <div className="w-10" /> {/* Spacer for centering */}
+      </div>
+
+      {/* Mobil Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Mobilde slide-in, desktop'ta fixed */}
+      <aside
+        className={`fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white flex flex-col z-40 transform transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0`}
+      >
+        {/* Logo - Desktop'ta göster */}
+        <div className="h-16 hidden lg:flex items-center px-6 border-b border-gray-700">
           <Link href="/admin" className="text-xl font-bold">
             🔐 Admin Panel
           </Link>
+        </div>
+        
+        {/* Mobil Logo ve Kapat Butonu */}
+        <div className="h-16 lg:hidden flex items-center justify-between px-6 border-b border-gray-700">
+          <Link href="/admin" className="text-xl font-bold">
+            🔐 Admin Panel
+          </Link>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-2 rounded-lg hover:bg-gray-800 text-white"
+            aria-label="Kapat"
+          >
+            <span className="text-2xl">×</span>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -114,9 +157,9 @@ export default function AdminLayout({
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="ml-64 min-h-screen">
-        <div className="p-8">{children}</div>
+      {/* Main Content - Mobilde full width, desktop'ta margin */}
+      <main className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
+        <div className="p-4 lg:p-8">{children}</div>
       </main>
     </div>
   );

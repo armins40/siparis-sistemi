@@ -228,7 +228,7 @@ export default function LandingPage() {
               🟢 Kredi kartı gerekmez
             </div>
             <Link
-              href="/dashboard"
+              href="/signup"
               className="block w-full text-center py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 mt-auto"
               style={{ backgroundColor: '#FB6602', color: '#FFFFFF' }}
             >
@@ -257,7 +257,7 @@ export default function LandingPage() {
               <li>✓ Temel destek</li>
             </ul>
             <Link
-              href="/signup?plan=monthly"
+              href="/signup"
               className="block w-full text-center py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 mt-auto"
               style={{ backgroundColor: '#FB6602', color: '#FFFFFF' }}
             >
@@ -286,7 +286,7 @@ export default function LandingPage() {
               <li>✓ Temel destek</li>
             </ul>
             <Link
-              href="/signup?plan=6month"
+              href="/signup"
               className="block w-full text-center py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 mt-auto"
               style={{ backgroundColor: '#FB6602', color: '#FFFFFF' }}
             >
@@ -319,11 +319,11 @@ export default function LandingPage() {
               <li>✓ Daha az maliyet, daha çok kazanç</li>
             </ul>
             <Link
-              href="/signup?plan=yearly"
+              href="/signup"
               className="block w-full text-center py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 mt-auto"
               style={{ backgroundColor: '#FB6602', color: '#FFFFFF' }}
             >
-              Yıllık Planı Seç
+              Hemen Başla
             </Link>
           </div>
         </div>

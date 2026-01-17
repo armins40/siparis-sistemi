@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { userLogin, getCurrentUser, checkUserSubscription } from '@/lib/auth';
+import { userLogin, userLoginAsync, getCurrentUser, checkUserSubscription } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,22 +45,33 @@ export default function LoginPage() {
       return;
     }
 
-    // Giriş kontrolü (şifre ile)
-    const user = userLogin(emailOrPhone.trim(), password.trim(), type);
+    // Email/Phone'u normalize et
+    const normalizedEmailOrPhone = type === 'email' 
+      ? emailOrPhone.trim().toLowerCase() 
+      : emailOrPhone.trim();
     
-    if (user) {
-      // Abonelik kontrolü
-      const subscription = checkUserSubscription(user.id);
+    // Giriş kontrolü (şifre ile) - önce database, sonra localStorage
+    try {
+      const user = await userLoginAsync(normalizedEmailOrPhone, password.trim(), type);
       
-      if (!subscription.hasActiveSubscription && user.plan !== 'free') {
-        // Abonelik süresi dolmuş, yenileme sayfasına yönlendir
-        router.push(`/signup?plan=${user.plan}`);
+      if (user) {
+        // Abonelik kontrolü
+        const subscription = checkUserSubscription(user.id);
+        
+        if (!subscription.hasActiveSubscription && user.plan !== 'free') {
+          // Abonelik süresi dolmuş, yenileme sayfasına yönlendir
+          router.push(`/signup?plan=${user.plan}`);
+        } else {
+          // Dashboard'a yönlendir
+          router.push('/dashboard');
+        }
       } else {
-        // Dashboard'a yönlendir
-        router.push('/dashboard');
+        setError(`${type === 'email' ? 'E-posta' : 'Telefon'} adresi veya şifre hatalı`);
+        setIsLoading(false);
       }
-    } else {
-      setError(`${type === 'email' ? 'E-posta' : 'Telefon'} adresi veya şifre hatalı`);
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Giriş yapılırken bir hata oluştu. Lütfen tekrar deneyin.');
       setIsLoading(false);
     }
   };
@@ -94,10 +105,12 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: '#555555' }}>
+              <label htmlFor="login-type" className="block text-sm font-medium mb-2" style={{ color: '#555555' }}>
                 Giriş Tipi
               </label>
               <select
+                id="login-type"
+                name="login-type"
                 value={type}
                 onChange={(e) => setType(e.target.value as 'email' | 'phone')}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
@@ -115,6 +128,7 @@ export default function LoginPage() {
               <input
                 type={type === 'email' ? 'email' : 'tel'}
                 id="emailOrPhone"
+                name="emailOrPhone"
                 value={emailOrPhone}
                 onChange={(e) => setEmailOrPhone(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -133,6 +147,7 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   id="password"
+                  name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10"

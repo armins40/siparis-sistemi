@@ -129,12 +129,14 @@ export default function QRPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-4">Menü Linki</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="menu-url" className="block text-sm font-medium text-gray-700 mb-2">
                 Menü URL
               </label>
               <div className="flex items-center space-x-2">
                 <input
                   type="text"
+                  id="menu-url"
+                  name="menu-url"
                   readOnly
                   value={menuUrl}
                   onClick={(e) => (e.target as HTMLInputElement).select()}

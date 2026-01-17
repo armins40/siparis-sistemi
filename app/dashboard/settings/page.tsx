@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { getStore, saveStore, generateSlug, getThemeId } from '@/lib/store';
 import { SECTORS } from '@/lib/sectors';
 import type { Sector } from '@/lib/types';
+// Database imports
+import { createStoreInDB, updateStoreInDB } from '@/lib/db/stores';
 
 export default function SettingsPage() {
   const [formData, setFormData] = useState({
@@ -46,13 +48,13 @@ export default function SettingsPage() {
     }
   }, []);
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Logo dosyası 5MB\'dan küçük olmalıdır');
+    // Check file size (max 10MB for Cloudinary)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Logo dosyası 10MB\'dan küçük olmalıdır');
       return;
     }
 
@@ -64,20 +66,49 @@ export default function SettingsPage() {
 
     setLogoFile(file);
 
+    // Preview için base64 (hızlı görüntüleme)
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
       setLogoPreview(base64String);
-      setFormData({ ...formData, logo: base64String });
     };
     reader.readAsDataURL(file);
+
+    // Cloudinary'ye yükle
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('folder', 'siparis/logos');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.url) {
+        // Cloudinary URL'ini kaydet
+        setFormData({ ...formData, logo: data.url });
+        setLogoPreview(data.url); // Cloudinary URL'ini preview olarak göster
+      } else {
+        alert(data.error || 'Logo yüklenirken bir hata oluştu');
+        setLogoFile(null);
+        setLogoPreview('');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Logo yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+      setLogoFile(null);
+      setLogoPreview('');
+    }
   };
 
-  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 10MB)
+    // Check file size (max 10MB for Cloudinary)
     if (file.size > 10 * 1024 * 1024) {
       alert('Banner dosyası 10MB\'dan küçük olmalıdır');
       return;
@@ -91,13 +122,42 @@ export default function SettingsPage() {
 
     setBannerFile(file);
 
+    // Preview için base64 (hızlı görüntüleme)
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
       setBannerPreview(base64String);
-      setFormData({ ...formData, banner: base64String });
     };
     reader.readAsDataURL(file);
+
+    // Cloudinary'ye yükle
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('folder', 'siparis/banners');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.url) {
+        // Cloudinary URL'ini kaydet
+        setFormData({ ...formData, banner: data.url });
+        setBannerPreview(data.url); // Cloudinary URL'ini preview olarak göster
+      } else {
+        alert(data.error || 'Banner yüklenirken bir hata oluştu');
+        setBannerFile(null);
+        setBannerPreview('');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Banner yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+      setBannerFile(null);
+      setBannerPreview('');
+    }
   };
 
   const removeLogo = () => {
@@ -123,14 +183,14 @@ export default function SettingsPage() {
     setFormData({ ...formData, name, slug });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.slug) {
       alert('Mağaza adı ve slug gerekli');
       return;
     }
     const currentStore = getStore();
-    saveStore({
+    const storeData = {
       slug: formData.slug,
       name: formData.name,
       description: formData.description || undefined,
@@ -141,8 +201,23 @@ export default function SettingsPage() {
       whatsapp: formData.whatsapp || undefined,
       themeId: currentStore?.themeId || getThemeId(), // Preserve theme
       sector: formData.sector || undefined, // Sektör
-    });
-    alert('Ayarlar kaydedildi!');
+    };
+    
+    // Save to localStorage (for backward compatibility)
+    saveStore(storeData);
+    
+    // Save to database
+    try {
+      const dbSuccess = await createStoreInDB(storeData);
+      if (dbSuccess) {
+        alert('✅ Ayarlar database\'e kaydedildi!');
+      } else {
+        alert('⚠️ Ayarlar localStorage\'a kaydedildi (database hatası)');
+      }
+    } catch (error) {
+      console.error('Database save error:', error);
+      alert('⚠️ Ayarlar localStorage\'a kaydedildi (database hatası)');
+    }
   };
 
   return (
@@ -154,11 +229,13 @@ export default function SettingsPage() {
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-8 space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="store-name" className="block text-sm font-medium text-gray-700 mb-2">
             Mağaza Adı *
           </label>
           <input
             type="text"
+            id="store-name"
+            name="store-name"
             required
             value={formData.name}
             onChange={(e) => handleNameChange(e.target.value)}
@@ -168,10 +245,12 @@ export default function SettingsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="store-sector" className="block text-sm font-medium text-gray-700 mb-2">
             Sektör *
           </label>
           <select
+            id="store-sector"
+            name="store-sector"
             required
             value={formData.sector}
             onChange={(e) => setFormData({ ...formData, sector: e.target.value as Sector })}
@@ -190,13 +269,15 @@ export default function SettingsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="store-slug" className="block text-sm font-medium text-gray-700 mb-2">
             Slug (URL) *
           </label>
           <div className="flex items-center space-x-2">
             <span className="text-gray-500">/m/</span>
             <input
               type="text"
+              id="store-slug"
+              name="store-slug"
               required
               value={formData.slug}
               onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
@@ -210,10 +291,12 @@ export default function SettingsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="store-description" className="block text-sm font-medium text-gray-700 mb-2">
             Açıklama
           </label>
           <textarea
+            id="store-description"
+            name="store-description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
@@ -224,7 +307,7 @@ export default function SettingsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="logo-input" className="block text-sm font-medium text-gray-700 mb-2">
               Logo / Profil Fotoğrafı
             </label>
             <div className="space-y-3">
@@ -274,7 +357,7 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="banner-input" className="block text-sm font-medium text-gray-700 mb-2">
               Banner Görseli
             </label>
             <div className="space-y-3">
@@ -325,11 +408,13 @@ export default function SettingsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="store-address" className="block text-sm font-medium text-gray-700 mb-2">
             Adres
           </label>
           <input
             type="text"
+            id="store-address"
+            name="store-address"
             value={formData.address}
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
@@ -338,11 +423,13 @@ export default function SettingsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="store-phone" className="block text-sm font-medium text-gray-700 mb-2">
             Telefon
           </label>
           <input
             type="tel"
+            id="store-phone"
+            name="store-phone"
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
@@ -351,11 +438,13 @@ export default function SettingsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="store-whatsapp" className="block text-sm font-medium text-gray-700 mb-2">
             WhatsApp Numarası
           </label>
           <input
             type="tel"
+            id="store-whatsapp"
+            name="store-whatsapp"
             value={formData.whatsapp}
             onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"

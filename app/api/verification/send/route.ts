@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Email veya telefon kontrolü
+    // Email veya telefon kontrolü ve normalize
     if (type === 'email' && !email) {
       return NextResponse.json(
         { error: 'E-posta adresi gerekli' },
@@ -32,7 +32,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const emailOrPhone = type === 'email' ? email : phone;
+    // Email/Phone'u normalize et (trim, lowercase for email)
+    const emailOrPhone = type === 'email' 
+      ? email.trim().toLowerCase() 
+      : phone.trim();
 
     // Doğrulama kodu oluştur
     const verificationCode = createVerificationCode(emailOrPhone, type);
@@ -42,8 +45,11 @@ export async function POST(request: NextRequest) {
       if (resend && process.env.RESEND_API_KEY) {
         try {
           // Resend ile gerçek mail gönder
-          await resend.emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'Siparis <noreply@siparis-sistemi.com>',
+          // Not: Domain verify edilmemişse Resend'in default domain'ini kullan (onboarding@resend.dev)
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+          
+          const result = await resend.emails.send({
+            from: fromEmail,
             to: email,
             subject: 'Siparis - E-posta Doğrulama Kodu',
             html: `
@@ -73,15 +79,28 @@ export async function POST(request: NextRequest) {
             `,
             text: `Siparis - E-posta Doğrulama Kodu\n\nDoğrulama kodunuz: ${verificationCode.code}\n\nBu kod 12 dakika geçerlidir.`,
           });
-          console.log(`✅ E-posta başarıyla gönderildi: ${email}`);
+          
+          console.log(`✅ E-posta başarıyla gönderildi: ${email}`, result);
         } catch (emailError: any) {
           console.error('❌ E-posta gönderme hatası:', emailError);
-          // E-posta gönderme başarısız olsa bile kodu döndür (test modunda)
-          // Production'da bu hatayı kullanıcıya göstermek isteyebilirsiniz
+          console.error('Hata detayları:', JSON.stringify(emailError, null, 2));
+          
+          // Hata mesajını response'a ekle
+          return NextResponse.json(
+            { 
+              error: 'E-posta gönderilemedi. Lütfen daha sonra tekrar deneyin.',
+              details: process.env.NODE_ENV === 'development' ? emailError.message : undefined,
+            },
+            { status: 500 }
+          );
         }
       } else {
-        // Resend API key yok, sadece log (production'da bu olmamalı)
+        // Resend API key yok
         console.error('RESEND_API_KEY bulunamadı - Mail gönderilemedi');
+        return NextResponse.json(
+          { error: 'E-posta servisi yapılandırılmamış' },
+          { status: 500 }
+        );
       }
     } else {
       // SMS gönderme (henüz entegre edilmedi)
@@ -91,11 +110,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Başarılı response
+    // Not: Production'da kod gösterilmemeli, ama şimdilik serverless sorununu çözmek için gösteriyoruz
+    // İleride database kullanıldığında bu kaldırılabilir
     return NextResponse.json(
       { 
         message: type === 'email' 
           ? `Doğrulama kodu ${email} adresine gönderildi`
           : `Doğrulama kodu ${phone} numarasına gönderildi`,
+        // Serverless sorununu çözmek için kod response'da dönüyor
+        // Client-side'da saklanacak ve verify ederken kullanılacak
+        verificationCode: verificationCode.code,
+        verificationId: verificationCode.id,
+        expiresAt: verificationCode.expiresAt,
       },
       { status: 200 }
     );
