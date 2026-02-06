@@ -36,13 +36,27 @@ export default function AdminLoginPage() {
       return;
     }
 
-    // Giriş kontrolü
-    const success = adminLogin(username, password);
-    
-    if (success) {
-      router.push('/admin');
-    } else {
-      setError('Kullanıcı adı veya şifre hatalı');
+    // Server-side authentication via API
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Set client-side auth state
+        adminLogin(username, password);
+        router.push('/admin');
+      } else {
+        setError(data.error || 'Kullanıcı adı veya şifre hatalı');
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError('Giriş yapılırken bir hata oluştu');
       setIsLoading(false);
     }
   };
@@ -90,6 +104,7 @@ export default function AdminLoginPage() {
                 style={{ borderColor: '#AF948F' }}
                 required
                 autoFocus
+                autoComplete="username"
               />
             </div>
 
@@ -106,6 +121,7 @@ export default function AdminLoginPage() {
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                 style={{ borderColor: '#AF948F' }}
                 required
+                autoComplete="current-password"
               />
             </div>
 
