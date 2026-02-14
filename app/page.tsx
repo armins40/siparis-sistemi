@@ -43,7 +43,12 @@ export default async function LandingPage() {
       />
       
       {/* Client-side interactive content */}
-      <LandingPageContent initialWhatsappNumber={whatsappNumber} />
+      <LandingPageContent
+        initialWhatsappNumber={whatsappNumber}
+        yearlyPrice={yearlyPriceStr}
+        monthlyPrice={monthlyPrice}
+        dailyPrice={dailyPrice}
+      />
     </>
   );
 }
