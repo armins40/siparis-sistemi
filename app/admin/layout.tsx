@@ -8,10 +8,12 @@ import { isAdminAuthenticated, adminLogout } from '@/lib/admin';
 const menuItems = [
   { href: '/admin', label: 'Genel Bakış', icon: '📊' },
   { href: '/admin/users', label: 'Kullanıcılar', icon: '👥' },
+  { href: '/admin/affiliate', label: 'Ortaklık (Affiliate)', icon: '🤝' },
   { href: '/admin/coupons', label: 'Kuponlar', icon: '🎫' },
   { href: '/admin/categories', label: 'Kategoriler', icon: '📁' },
   { href: '/admin/products', label: 'Ürünler', icon: '📦' },
   { href: '/admin/analytics', label: 'Analizler', icon: '📈' },
+  { href: '/admin/settings', label: 'Ayarlar', icon: '⚙️' },
 ];
 
 export default function AdminLayout({

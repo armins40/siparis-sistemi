@@ -44,14 +44,17 @@ export async function POST(request: NextRequest) {
     if (type === 'email') {
       if (resend && process.env.RESEND_API_KEY) {
         try {
-          // Resend ile gerçek mail gönder
-          // Not: Domain verify edilmemişse Resend'in default domain'ini kullan (onboarding@resend.dev)
-          const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-          
+          // Resend ile gerçek mail gönder. Yahoo/Gmail spam'e düşmemesi için:
+          // - Kendi domain'inizi Resend'de doğrulayın (SPF/DKIM)
+          // - RESEND_FROM_EMAIL örn: "Sipariş Sistemi <noreply@yourdomain.com>"
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'Sipariş Sistemi <onboarding@resend.dev>';
+          const replyTo = process.env.RESEND_REPLY_TO || undefined;
+
           const result = await resend.emails.send({
             from: fromEmail,
             to: email,
-            subject: 'Siparis - E-posta Doğrulama Kodu',
+            ...(replyTo && { reply_to: replyTo }),
+            subject: 'Sipariş Sistemi – E-posta doğrulama kodunuz',
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #FAFAFA;">
                 <div style="background-color: #FFFFFF; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -80,10 +83,8 @@ export async function POST(request: NextRequest) {
             text: `Siparis - E-posta Doğrulama Kodu\n\nDoğrulama kodunuz: ${verificationCode.code}\n\nBu kod 12 dakika geçerlidir.`,
           });
           
-          console.log(`✅ E-posta başarıyla gönderildi: ${email}`, result);
         } catch (emailError: any) {
-          console.error('❌ E-posta gönderme hatası:', emailError);
-          console.error('Hata detayları:', JSON.stringify(emailError, null, 2));
+          console.error('Error sending email:', emailError);
           
           // Hata mesajını response'a ekle
           return NextResponse.json(
@@ -104,9 +105,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // SMS gönderme (henüz entegre edilmedi)
-      console.log(`⚠️ SMS gönderme henüz entegre edilmedi`);
-      console.log(`📱 Doğrulama kodu (${type}): ${emailOrPhone}`);
-      console.log(`🔑 Kod: ${verificationCode.code}`);
+      // SMS functionality not yet implemented
     }
 
     // Başarılı response

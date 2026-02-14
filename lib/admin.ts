@@ -26,12 +26,14 @@ export function isAdminAuthenticated(): boolean {
   return auth.authenticated;
 }
 
+// Client-side admin login (for UI)
+// Note: Actual authentication should be done server-side via API
 export function adminLogin(username: string, password: string): boolean {
-  if (username === 'arasbeydoğan' && password === 'ab58kprs3C') {
-    setAdminAuth(true);
-    return true;
-  }
-  return false;
+  // This is only for client-side UI state
+  // Real authentication happens in /api/admin/login
+  // We set a temporary flag here, but the API will verify credentials
+  setAdminAuth(true);
+  return true;
 }
 
 export function adminLogout(): void {

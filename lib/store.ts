@@ -10,6 +10,10 @@ export function getStore(): Store | null {
   return safeParseJSON<Store | null>(stored, null);
 }
 
+export function clearStore(): void {
+  safeSetItem(STORE_KEY, '');
+}
+
 export function saveStore(store: Store): boolean {
   const json = safeStringifyJSON(store);
   if (!json) return false;

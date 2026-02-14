@@ -1,29 +1,46 @@
 // Kullanıcı authentication ve session yönetimi
 
 import { safeGetItem, safeSetItem, safeParseJSON, safeStringifyJSON } from './storage';
-import { getUserByEmail, getUserByPhone, getUserById } from './admin';
-import { getUserByIdFromDB } from './db/users';
+import { getUserByEmail, getUserByPhone, getUserById, updateUser, createUser, getAllUsers, deleteUser } from './admin';
 import { getActiveSubscription } from './subscription';
+import { clearStore } from './store';
 import type { User } from './types';
 
 const CURRENT_USER_KEY = 'siparis_current_user';
 
-// Mevcut kullanıcıyı getir (async - önce database, sonra localStorage)
+// Mevcut kullanıcıyı getir (async - önce API'den DB, yoksa localStorage)
+// Admin plan güncellemeleri (hediye 1 aylık vb.) DB'de; dashboard bunu API'den almalı.
 export async function getCurrentUserAsync(): Promise<User | null> {
   const userId = safeGetItem(CURRENT_USER_KEY);
   if (!userId) return null;
-  
-  // Önce database'den dene
+
+  if (typeof window === 'undefined') return getUserById(userId);
+
   try {
-    const userFromDB = await getUserByIdFromDB(userId);
-    if (userFromDB) {
-      return userFromDB;
+    const res = await fetch(`/api/auth/me?userId=${encodeURIComponent(userId)}`);
+    const data = await res.json();
+    if (data.success && data.user) {
+      const apiUser = data.user as User;
+      const existing = getUserById(userId);
+      if (existing) {
+        updateUser(userId, apiUser);
+      } else {
+        const users = getAllUsers();
+        users.push(apiUser);
+        safeSetItem('siparis_users', safeStringifyJSON(users) || '[]');
+      }
+      return apiUser;
     }
-  } catch (error) {
-    console.warn('Database user fetch failed, falling back to localStorage:', error);
+    // 404 = kullanıcı yok (admin silmiş) — localStorage + oturum temizle
+    if (res.status === 404) {
+      deleteUser(userId);
+      safeSetItem(CURRENT_USER_KEY, '');
+      return null;
+    }
+  } catch (e) {
+    console.warn('getCurrentUserAsync: API failed, using localStorage', e);
   }
-  
-  // Database'de bulunamadıysa localStorage'dan oku
+
   return getUserById(userId);
 }
 
@@ -37,7 +54,10 @@ export function getCurrentUser(): User | null {
 
 // Kullanıcıyı oturuma kaydet
 export function setCurrentUser(userId: string): boolean {
-  return safeSetItem(CURRENT_USER_KEY, userId);
+  console.log('🔐 Setting current user:', userId);
+  const result = safeSetItem(CURRENT_USER_KEY, userId);
+  console.log('✅ Current user set:', result);
+  return result;
 }
 
 // Oturumu kapat
@@ -64,70 +84,70 @@ export function loginWithEmailOrPhone(emailOrPhone: string, type: 'email' | 'pho
   return null;
 }
 
-// Email/telefon + şifre ile giriş (async - önce database, sonra localStorage)
-export async function userLoginAsync(emailOrPhone: string, password: string, type: 'email' | 'phone'): Promise<User | null> {
-  // Normalize et
+export type LoginResult = { user: User | null; error?: 'not_active' | 'not_found' | 'invalid_password' };
+
+// Email/telefon + şifre ile giriş (async - önce API route, sonra localStorage)
+export async function userLoginAsync(emailOrPhone: string, password: string, type: 'email' | 'phone'): Promise<LoginResult> {
   const normalizedEmailOrPhone = type === 'email' 
     ? emailOrPhone.trim().toLowerCase() 
     : emailOrPhone.trim();
   
+  console.log('🔐 Login attempt:', { type, normalizedEmailOrPhone, passwordLength: password.length });
+  
   let user: User | null = null;
   
-  // Önce database'den dene
   try {
-    if (type === 'email') {
-      const { getUserByEmailFromDB } = await import('./db/users');
-      user = await getUserByEmailFromDB(normalizedEmailOrPhone);
-    } else {
-      const { getUserByPhoneFromDB } = await import('./db/users');
-      user = await getUserByPhoneFromDB(normalizedEmailOrPhone);
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailOrPhone: normalizedEmailOrPhone, password, type }),
+    });
+
+    const result = await response.json();
+
+    if (result.success && result.user) {
+      const apiUser = result.user as User;
+      user = apiUser;
+      if (apiUser.isActive) {
+        try {
+          const existingUser = getUserById(apiUser.id);
+          if (existingUser) updateUser(apiUser.id, apiUser);
+          else {
+            const users = getAllUsers();
+            users.push(apiUser);
+            safeSetItem('siparis_users', safeStringifyJSON(users) || '[]');
+          }
+        } catch (e) {
+          console.error('localStorage update:', e);
+        }
+        clearStore();
+        setCurrentUser(apiUser.id);
+        return { user: apiUser };
+      }
+      return { user: null, error: 'not_active' };
     }
-  } catch (error) {
-    console.warn('Database user fetch failed, falling back to localStorage:', error);
-  }
-  
-  // Database'de bulunamadıysa localStorage'dan oku
-  if (!user) {
-    if (type === 'email') {
-      user = getUserByEmail(normalizedEmailOrPhone);
-    } else {
-      user = getUserByPhone(normalizedEmailOrPhone);
+
+    if (response.status === 403 || (result.error && String(result.error).toLowerCase().includes('not active'))) {
+      return { user: null, error: 'not_active' };
     }
+    if (response.status === 404) {
+      return { user: null, error: 'not_found' };
+    }
+    if (response.status === 401) {
+      return { user: null, error: 'invalid_password' };
+    }
+    console.log('❌ Login failed from API:', result.error);
+  } catch (e) {
+    console.warn('API login failed, falling back to localStorage:', e);
   }
   
-  if (!user) {
-    console.log('❌ User not found:', { type, normalizedEmailOrPhone });
-    return null;
-  }
-  
-  console.log('✅ User found:', { 
-    id: user.id, 
-    email: user.email, 
-    phone: user.phone, 
-    hasPassword: !!user.password,
-    isActive: user.isActive 
-  });
-  
-  // Şifre kontrolü
-  if (user.password && user.password !== password) {
-    console.log('❌ Password mismatch');
-    return null; // Şifre yanlış
-  }
-  
-  // Şifresi olmayan kullanıcılar için (eski kayıtlar)
-  if (!user.password) {
-    console.log('❌ User has no password');
-    return null; // Şifre gerekli
-  }
-  
-  if (user.isActive) {
-    setCurrentUser(user.id);
-    console.log('✅ Login successful');
-    return user;
-  }
-  
-  console.log('❌ User not active');
-  return null;
+  const local = type === 'email' ? getUserByEmail(normalizedEmailOrPhone) : getUserByPhone(normalizedEmailOrPhone);
+  if (!local) return { user: null, error: 'not_found' };
+  if (!local.password || local.password !== password) return { user: null, error: 'invalid_password' };
+  if (!local.isActive) return { user: null, error: 'not_active' };
+  clearStore();
+  setCurrentUser(local.id);
+  return { user: local };
 }
 
 // Email/telefon + şifre ile giriş (sync - sadece localStorage, geriye dönük uyumluluk için)

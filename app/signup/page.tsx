@@ -1,25 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { createUser, getUserByEmail, getUserByPhone, updateUser } from '@/lib/admin';
-import { setCurrentUser } from '@/lib/auth';
-import { saveStore, generateSlug } from '@/lib/store';
-import type { User, Sector } from '@/lib/types';
+import Image from 'next/image';
+import { setCurrentUser, logout } from '@/lib/auth';
+import { generateSlug, saveStore, clearStore } from '@/lib/store';
+import type { User, Sector, Store } from '@/lib/types';
 import { SECTORS } from '@/lib/sectors';
-// Database imports
-import { createUserInDB, updateUserInDB } from '@/lib/db/users';
-import { createStoreInDB } from '@/lib/db/stores';
 
 function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const referralCodeFromUrl = searchParams.get('ref') || searchParams.get('k') || '';
   // Artık plan seçimi yok - herkes 7 günlük ücretsiz deneme ile başlıyor
   const plan: User['plan'] = 'trial';
   
   const [step, setStep] = useState<'info' | 'verification' | 'payment'>('info');
   const [formData, setFormData] = useState({
     name: '',
+    companyName: '',
     email: '',
     phone: '',
     password: '',
@@ -33,8 +33,18 @@ function SignupForm() {
   const [userId, setUserId] = useState<string | null>(null);
   const [verified, setVerified] = useState({ email: false, phone: false });
   const [verificationCodes, setVerificationCodes] = useState<Map<string, { code: string; expiresAt: string; id: string }>>(new Map());
+  const [tekelAgeConfirm, setTekelAgeConfirm] = useState(false);
 
-  // Plan kontrolü kaldırıldı - herkes trial olarak kayıt oluyor
+  useEffect(() => {
+    logout();
+    clearStore();
+  }, []);
+
+  // Affiliate tıklama kaydı: ref ile geldiyse bir kez say
+  useEffect(() => {
+    if (!referralCodeFromUrl.trim()) return;
+    fetch(`/api/affiliate/click?code=${encodeURIComponent(referralCodeFromUrl.trim())}`).catch(() => {});
+  }, [referralCodeFromUrl]);
 
   // Şifre validasyonu: En az 1 sayı ve 1 büyük harf
   const validatePassword = (password: string): boolean => {
@@ -67,6 +77,12 @@ function SignupForm() {
       return;
     }
 
+    if (!formData.companyName.trim()) {
+      setError('Firma ismi gerekli');
+      setIsLoading(false);
+      return;
+    }
+
     if (!formData.email && !formData.phone) {
       setError('E-posta veya telefon numarası gerekli');
       setIsLoading(false);
@@ -84,26 +100,18 @@ function SignupForm() {
       return;
     }
 
-    if (formData.email) {
-      const existing = getUserByEmail(formData.email);
-      if (existing) {
-        setError('Bu e-posta adresi zaten kullanılıyor');
-        setIsLoading(false);
-        return;
-      }
-    }
-
-    if (formData.phone) {
-      const existing = getUserByPhone(formData.phone);
-      if (existing) {
-        setError('Bu telefon numarası zaten kullanılıyor');
-        setIsLoading(false);
-        return;
-      }
-    }
+    // Check database for existing users (not localStorage)
+    // This check will be done on the server side in the API route
+    // We only do basic validation here
 
     if (!formData.sector) {
       setError('Sektör seçimi zorunludur');
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.sector === 'tekel' && !tekelAgeConfirm) {
+      setError('18 yaş altına satış yapmayacağınızı kabul etmeniz gerekiyor.');
       setIsLoading(false);
       return;
     }
@@ -115,49 +123,68 @@ function SignupForm() {
       trialEndDate.setDate(trialEndDate.getDate() + 7); // 7 gün ekle
       const expiresAt = trialEndDate.toISOString();
       
-      // Kullanıcı oluştur (herkes trial olarak başlıyor)
-      const user = createUser({
+      // Generate user ID and store slug first
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const storeSlug = generateSlug(formData.companyName.trim() || `store-${userId}`);
+      
+      // Create user object (not saved to localStorage - only database)
+      const user = {
+        id: userId,
         name: formData.name,
         email: formData.email || undefined,
         phone: formData.phone || undefined,
         password: formData.password,
         sector: formData.sector,
-        plan: 'trial', // Herkes trial olarak başlıyor
+        plan: 'trial' as const, // Herkes trial olarak başlıyor
         isActive: false, // Doğrulama yapılana kadar aktif değil
         emailVerified: false,
         phoneVerified: false,
         expiresAt, // 7 gün sonra
-      });
+        storeSlug: storeSlug,
+        createdAt: new Date().toISOString(),
+      };
 
-      // Store oluştur (sektör ile birlikte)
-      const storeSlug = generateSlug(formData.name || `store-${user.id}`);
+      // Store oluştur — slug firma isminden, mağaza adı firma ismi
       const storeData = {
         slug: storeSlug,
-        name: formData.name,
+        name: formData.companyName.trim(),
         sector: formData.sector,
       };
       
-      // Save to localStorage (for backward compatibility)
-      saveStore(storeData);
-
-      // Kullanıcıya store slug'ı ekle
-      updateUser(user.id, {
-        storeSlug: storeSlug,
-      });
-      
-      // Save to database
+      // Save to database (via API route) - NO localStorage
       try {
-        // Save user to database
-        const userWithStore = { ...user, storeSlug };
-        await createUserInDB(userWithStore);
-        
-        // Save store to database
-        await createStoreInDB(storeData);
-        
-        console.log('✅ User and store saved to database');
-      } catch (dbError) {
-        console.error('⚠️ Database save error (continuing with localStorage):', dbError);
-        // Continue even if database fails - localStorage is fallback
+        // Save user and store to database via API
+        const userWithStore = user;
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user: userWithStore,
+            store: storeData,
+            referralCode: referralCodeFromUrl.trim() || undefined,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          console.log('✅ User and store saved to database');
+          saveStore({ ...storeData, sector: (storeData.sector || undefined) as Sector | undefined } as Store);
+        } else {
+          // Show API error to user
+          const errorMessage = result.error || 'Kayıt sırasında bir hata oluştu';
+          setError(errorMessage);
+          setIsLoading(false);
+          return; // Stop signup process if database save fails
+        }
+      } catch (dbError: any) {
+        console.error('⚠️ Database save error:', dbError);
+        const errorMessage = dbError?.message || 'Kayıt sırasında bir hata oluştu';
+        setError(errorMessage);
+        setIsLoading(false);
+        return; // Stop signup process if database save fails
       }
 
       setUserId(user.id);
@@ -275,28 +302,42 @@ function SignupForm() {
           const localVerified = { ...verified, [type]: true };
           setVerified(localVerified);
           
-          // Kullanıcı bilgilerini güncelle
           if (userId) {
-            const updates = {
-              [type === 'email' ? 'emailVerified' : 'phoneVerified']: true,
-              isActive: true,
-            };
-            updateUser(userId, updates);
-            
-            // Also update in database
-            try {
-              await updateUserInDB(userId, updates);
-            } catch (dbError) {
-              console.error('⚠️ Database update error:', dbError);
+            let activated = false;
+            for (let attempt = 0; attempt < 2 && !activated; attempt++) {
+              try {
+                const res = await fetch('/api/auth/activate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId,
+                    emailVerified: type === 'email',
+                    phoneVerified: type === 'phone',
+                  }),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                  activated = true;
+                  console.log('✅ User activated in database:', userId);
+                } else if (attempt === 1) {
+                  setError('Hesap aktifleştirilemedi. Sayfayı yenileyip tekrar doğrulayın veya destekle iletişime geçin.');
+                  setIsLoading(false);
+                  return true;
+                } else {
+                  await new Promise((r) => setTimeout(r, 800));
+                }
+              } catch (e) {
+                if (attempt === 1) {
+                  setError('Hesap aktifleştirilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
+                  setIsLoading(false);
+                  return true;
+                }
+                await new Promise((r) => setTimeout(r, 800));
+              }
             }
-          }
-          
-          // Trial planı için dashboard'a yönlendir (7 gün sonra ödeme gerekli)
-          if (userId) {
             setCurrentUser(userId);
+            router.push(`/dashboard/${userId}`);
           }
-          router.push('/dashboard');
-          
           setIsLoading(false);
           return true;
         } else if (expiresAt <= now) {
@@ -356,27 +397,42 @@ function SignupForm() {
           const newVerified = { ...verified, [type]: true };
           setVerified(newVerified);
           
-          // Kullanıcı bilgilerini güncelle
           if (userId) {
-            const updates = {
-              [type === 'email' ? 'emailVerified' : 'phoneVerified']: true,
-              isActive: true, // Doğrulama yapıldıysa aktif
-            };
-            updateUser(userId, updates);
-            
-            // Also update in database
-            try {
-              await updateUserInDB(userId, updates);
-            } catch (dbError) {
-              console.error('⚠️ Database update error:', dbError);
+            let activated = false;
+            for (let attempt = 0; attempt < 2 && !activated; attempt++) {
+              try {
+                const res = await fetch('/api/auth/activate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId,
+                    emailVerified: type === 'email',
+                    phoneVerified: type === 'phone',
+                  }),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                  activated = true;
+                  console.log('✅ User activated in database:', userId);
+                } else if (attempt === 1) {
+                  setError('Hesap aktifleştirilemedi. Sayfayı yenileyip tekrar doğrulayın veya destekle iletişime geçin.');
+                  setIsLoading(false);
+                  return true;
+                } else {
+                  await new Promise((r) => setTimeout(r, 800));
+                }
+              } catch (e) {
+                if (attempt === 1) {
+                  setError('Hesap aktifleştirilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
+                  setIsLoading(false);
+                  return true;
+                }
+                await new Promise((r) => setTimeout(r, 800));
+              }
             }
-          }
-          
-          // Trial planı için dashboard'a yönlendir (7 gün sonra ödeme gerekli)
-          if (userId) {
             setCurrentUser(userId);
+            router.push(`/dashboard/${userId}`);
           }
-          router.push('/dashboard');
 
           setIsLoading(false);
           return true;
@@ -400,12 +456,27 @@ function SignupForm() {
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAFA' }}>
       {/* Header */}
       <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <h1 className="text-2xl font-bold" style={{ color: '#555555' }}>
-                Siparis
-              </h1>
+        <div className="max-w-7xl mx-auto px-2 md:px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            <Link href="/" className="flex items-center md:justify-start">
+              <Image
+                src="/logo.svg"
+                alt="Siparis Sistemi"
+                width={531}
+                height={354}
+                className="hidden md:block"
+                style={{ width: '380px', height: 'auto' }}
+                priority
+              />
+              <Image
+                src="/logo.svg"
+                alt="Siparis Sistemi"
+                width={531}
+                height={354}
+                className="md:hidden"
+                style={{ width: '200px', height: 'auto' }}
+                priority
+              />
             </Link>
             <Link
               href="/"
@@ -479,6 +550,26 @@ function SignupForm() {
                 </div>
 
                 <div>
+                  <label htmlFor="signup-company" className="block text-sm font-medium text-gray-700 mb-2">
+                    Firma İsmi *
+                  </label>
+                  <input
+                    type="text"
+                    id="signup-company"
+                    name="signup-company"
+                    required
+                    value={formData.companyName}
+                    onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    style={{ borderColor: '#AF948F' }}
+                    placeholder="Örn. Keyif Tekel"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Menü linki (slug) firma isminizden otomatik oluşturulur
+                  </p>
+                </div>
+
+                <div>
                   <label htmlFor="signup-sector" className="block text-sm font-medium text-gray-700 mb-2">
                     Sektörünüz *
                   </label>
@@ -487,7 +578,11 @@ function SignupForm() {
                     name="signup-sector"
                     required
                     value={formData.sector}
-                    onChange={(e) => setFormData({ ...formData, sector: e.target.value as Sector })}
+                    onChange={(e) => {
+                      const v = e.target.value as Sector;
+                      setFormData({ ...formData, sector: v });
+                      if (v !== 'tekel') setTekelAgeConfirm(false);
+                    }}
                     className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-base font-medium"
                     style={{ borderColor: formData.sector ? '#FB6602' : '#AF948F' }}
                   >
@@ -503,6 +598,27 @@ function SignupForm() {
                       ? `✓ ${SECTORS.find(s => s.value === formData.sector)?.label} sektörü seçildi`
                       : 'Sektörünüze özel ürünler ve kategoriler göreceksiniz'}
                   </p>
+                  {formData.sector === 'tekel' && (
+                    <div className="mt-4 p-4 rounded-lg border-2 border-amber-200 bg-amber-50">
+                      <p className="text-sm font-medium text-amber-900 mb-2">
+                        ⚠️ 18 yaş altına satış yapılamaz
+                      </p>
+                      <p className="text-sm text-amber-800 mb-3">
+                        Tekel sektöründe 18 yaşından küçüklere satış yapılamaz. Bu sektörü seçerek 18 yaş altına satış yapmayacağınızı kabul etmeniz gerekmektedir.
+                      </p>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tekelAgeConfirm}
+                          onChange={(e) => setTekelAgeConfirm(e.target.checked)}
+                          className="mt-1 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="text-sm text-amber-900">
+                          18 yaş altına satış yapmayacağımı kabul ediyorum.
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1045,5 +1161,9 @@ function PaymentStep({
 }
 
 export default function SignupPage() {
-  return <SignupForm />;
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500">Yükleniyor...</div>}>
+      <SignupForm />
+    </Suspense>
+  );
 }

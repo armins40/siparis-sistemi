@@ -73,9 +73,15 @@ async function setupDatabase() {
         whatsapp TEXT,
         theme_id TEXT DEFAULT 'modern-blue',
         sector TEXT,
+        delivery_fee DECIMAL(10, 2),
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
+    `;
+
+    // Add delivery_fee column if it doesn't exist (for existing databases)
+    await sql`
+      ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2)
     `;
 
     await sql`CREATE INDEX IF NOT EXISTS idx_stores_slug ON stores(slug)`;

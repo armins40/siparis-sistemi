@@ -1,16 +1,9 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
-import { getStore } from '@/lib/store';
 import { getTheme } from '@/lib/themes';
-import { getThemeId } from '@/lib/store';
-import { getProductsByCategory, getPublishedProducts, getAllProducts } from '@/lib/products';
 import { getAllCategories } from '@/lib/categories';
-import { getUserByStoreSlug } from '@/lib/admin';
-// Database imports
-import { getUserByStoreSlugFromDB } from '@/lib/db/users';
-import { getStoreFromDB } from '@/lib/db/stores';
-import { getProductsByStoreSlugFromDB } from '@/lib/db/products';
+import { is18PlusProduct } from '@/lib/age-restricted';
 import type { Product, Store } from '@/lib/types';
 
 interface MenuPageProps {
@@ -33,6 +26,11 @@ export default function MenuPage({ params }: MenuPageProps) {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [trialExpired, setTrialExpired] = useState(false);
+  const [storeNotFound, setStoreNotFound] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [ageDeclined, setAgeDeclined] = useState(false);
 
   useEffect(() => {
     // Validate slug
@@ -44,121 +42,133 @@ export default function MenuPage({ params }: MenuPageProps) {
     // Database'den veri yükleme fonksiyonu
     const loadMenuData = async () => {
       try {
-        console.log('🔍 Loading menu data for slug:', slug);
-        
         let storeData: Store | null = null;
         let allProducts: Product[] = [];
         
-        // ÖNCE: Direkt slug ile ürünleri ara (en güvenilir yöntem)
-        console.log('🔍 Step 1: Searching products directly by store_slug:', slug);
-        console.log('📱 Device: Mobile/Desktop - URL:', typeof window !== 'undefined' ? window.location.href : 'SSR');
-        const directProducts = await getProductsByStoreSlugFromDB(slug);
-        console.log('📦 Direct products by slug:', directProducts.length);
-        if (directProducts.length === 0) {
-          console.warn('⚠️ WARNING: No products found with store_slug:', slug);
-          console.warn('💡 Tip: Check if products in database have correct store_slug value');
-        }
-        
-        if (directProducts.length > 0) {
-          // Ürünler bulundu, store'u da al
-          allProducts = directProducts;
-          storeData = await getStoreFromDB(slug);
-          console.log('✅ Found products and store directly by slug');
-        } else {
-          // Ürünler bulunamadı, user'ı kontrol et
-          console.log('⚠️ No products found by slug, checking user...');
-          const userFromDB = await getUserByStoreSlugFromDB(slug);
-          console.log('👤 User from DB:', userFromDB ? 'Found' : 'Not found');
+        // ÖNCE: API route ile ürünleri al (server-side çalışır)
+        try {
+          const response = await fetch(`/api/menu/${encodeURIComponent(slug)}`);
           
-          if (userFromDB && userFromDB.storeSlug) {
-            // User found, try to get products by user's storeSlug
-            console.log('✅ User found, loading store and products for:', userFromDB.storeSlug);
-            storeData = await getStoreFromDB(userFromDB.storeSlug);
-            allProducts = await getProductsByStoreSlugFromDB(userFromDB.storeSlug);
-            console.log('📦 Products from DB by user storeSlug:', allProducts.length);
+          if (!response.ok) {
+            throw new Error(`API responded with status ${response.status}`);
           }
           
-          // Hala ürün yoksa localStorage'a düş
-          if (allProducts.length === 0) {
-            console.log('📱 Falling back to localStorage...');
-            const user = getUserByStoreSlug(slug);
-            const allProductsList = getAllProducts();
-            console.log('📦 Total products in localStorage:', allProductsList.length);
-            
-            // Slug ile eşleşen ürünleri bul (userId === slug VE isPublished === true)
-            const slugProducts = allProductsList.filter(p => {
-              if (p.userId === slug && p.isPublished) return true;
-              return false;
-            });
-            console.log('📦 Products matching slug in localStorage:', slugProducts.length);
-            
-            if (user && user.sector) {
-              const userProducts = allProductsList.filter(p => {
-                if ((p.userId === user.id || p.userId === user.storeSlug) && p.isPublished) return true;
-                if (p.createdBy === 'admin' && p.sector === user.sector && p.isPublished) return true;
-                return false;
-              });
-              allProducts = userProducts.length > 0 ? userProducts : slugProducts;
-            } else {
-              allProducts = slugProducts;
-            }
-            
-            // Store from localStorage
-            const localStore = getStore();
-            if (localStore && localStore.slug === slug) {
-              storeData = localStore;
-            }
+          const result = await response.json();
+          
+          if (result && result.success) {
+            allProducts = Array.isArray(result.products) ? result.products : [];
+            storeData = result.store || null;
+            setTrialExpired(!!result.trialExpired);
+            setStoreNotFound(!!result.storeNotFound);
+            if (result.trialExpired) allProducts = [];
+            if (result.storeNotFound) storeData = null;
           }
+        } catch (apiError: any) {
+          console.error('Error fetching from API:', apiError?.message || apiError);
+          // No localStorage fallback - show error state
+          setError('Menü yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.');
+          setLoading(false);
+          return;
         }
         
-        // Store fallback
-        if (!storeData) {
-          storeData = {
-            slug: slug,
-            name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-            themeId: getThemeId(),
-          };
+        if (storeNotFound || !storeData) {
+          setStore(null);
+          setProducts([]);
+          setAllCategories([]);
+          setStoreNotFound(true);
+          setLoading(false);
+          return;
+        }
+
+        // Ensure whatsapp is properly set (trim and check)
+        if (storeData.whatsapp != null && typeof storeData.whatsapp === 'string') {
+          const trimmed = storeData.whatsapp.trim();
+          storeData.whatsapp = trimmed !== '' ? trimmed : undefined;
+        } else if (storeData.whatsapp == null) {
+          storeData.whatsapp = undefined;
         }
         
-        // Categories
-        const managedCategories = getAllCategories();
+        // Categories - Sadece ürünü olan kategorileri göster
         const productCategories = Array.from(new Set(allProducts.map(p => p.category).filter(Boolean)));
-        const categories = Array.from(new Set([
-          ...managedCategories.map(c => c.name),
-          ...productCategories
-        ])).sort();
+        // Sadece gerçekten ürünü olan kategorileri göster (boş kategorileri gösterme)
+        const categories = productCategories.sort();
         
         if (!storeData.themeId) {
-          storeData.themeId = getThemeId();
+          storeData.themeId = 'modern-blue';
+        }
+        const df = storeData.deliveryFee;
+        if (df != null) {
+          const n = typeof df === 'number' ? df : parseFloat(String(df));
+          (storeData as { deliveryFee?: number }).deliveryFee = !Number.isNaN(n) && n >= 0 ? n : undefined;
         }
         
-        console.log('✅ Final products count:', allProducts.length);
-        console.log('✅ Store data:', storeData ? storeData.name : 'Not found');
-        console.log('✅ Products sample:', allProducts.length > 0 ? {
-          id: allProducts[0].id,
-          name: allProducts[0].name,
-          isPublished: allProducts[0].isPublished,
-          storeSlug: (allProducts[0] as any).storeSlug || allProducts[0].userId
-        } : 'No products');
-        
+        // Normalize products: ensure price is always a number
+        const normalizedProducts = allProducts.map(product => ({
+          ...product,
+          price: product.price != null 
+            ? (typeof product.price === 'number' ? product.price : parseFloat(String(product.price)) || 0)
+            : 0
+        }));
+
         setStore(storeData);
-        setProducts(allProducts);
+        setProducts(normalizedProducts);
         setAllCategories(categories);
         setLoading(false);
+
+        // Update page metadata for SEO
+        if (storeData && typeof window !== 'undefined') {
+          const title = `${storeData.name} - Online Sipariş Menüsü | Siparis`;
+          const description = storeData.description || `${storeData.name} online sipariş menüsü. Hızlı ve kolay sipariş verin.`;
+          const url = `https://www.siparis-sistemi.com/m/${slug}`;
+          
+          // Update document title
+          document.title = title;
+          
+          // Update or create meta tags
+          const updateMetaTag = (name: string, content: string, isProperty = false) => {
+            const selector = isProperty ? `meta[property="${name}"]` : `meta[name="${name}"]`;
+            let meta = document.querySelector(selector) as HTMLMetaElement;
+            if (!meta) {
+              meta = document.createElement('meta');
+              if (isProperty) {
+                meta.setAttribute('property', name);
+              } else {
+                meta.setAttribute('name', name);
+              }
+              document.head.appendChild(meta);
+            }
+            meta.setAttribute('content', content);
+          };
+
+          // Update meta tags
+          updateMetaTag('description', description);
+          updateMetaTag('og:title', title, true);
+          updateMetaTag('og:description', description, true);
+          updateMetaTag('og:url', url, true);
+          updateMetaTag('og:type', 'website', true);
+          if (storeData.banner) {
+            updateMetaTag('og:image', storeData.banner, true);
+          } else if (storeData.logo) {
+            updateMetaTag('og:image', storeData.logo, true);
+          }
+          updateMetaTag('twitter:card', 'summary_large_image');
+          updateMetaTag('twitter:title', title);
+          updateMetaTag('twitter:description', description);
+          
+          // Update canonical link
+          let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+          if (!canonical) {
+            canonical = document.createElement('link');
+            canonical.setAttribute('rel', 'canonical');
+            document.head.appendChild(canonical);
+          }
+          canonical.setAttribute('href', url);
+        }
       } catch (error) {
-        console.error('❌ Error loading menu data from DB:', error);
-        // Fallback to localStorage
-        const user = getUserByStoreSlug(slug);
-        const allProductsList = getAllProducts();
-        const slugProducts = allProductsList.filter(p => p.userId === slug && p.isPublished);
-        const localStore = getStore();
-        
-        setStore(localStore || {
-          slug: slug,
-          name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-          themeId: getThemeId(),
-        });
-        setProducts(slugProducts);
+        console.error('Error loading menu data:', error);
+        setError('Menü yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.');
+        setStore(null);
+        setProducts([]);
         setAllCategories([]);
         setLoading(false);
       }
@@ -167,6 +177,14 @@ export default function MenuPage({ params }: MenuPageProps) {
     // Database'den veri yükle (tüm cihazlardan erişilebilir)
     loadMenuData();
   }, [slug]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !store || store.sector !== 'tekel' || !slug) return;
+    try {
+      const key = `tekel_age_${slug}`;
+      if (sessionStorage.getItem(key) === '1') setAgeConfirmed(true);
+    } catch (_) {}
+  }, [store, slug]);
 
   const addProduct = (product: Product, increment: number = 1) => {
     const newMap = new Map(selectedProducts);
@@ -208,7 +226,28 @@ export default function MenuPage({ params }: MenuPageProps) {
     selectedProducts.forEach((item, productId) => {
       const product = products.find((p) => p.id === productId);
       if (product) {
-        total += product.price * item.quantity;
+        const price = product.price != null 
+          ? (typeof product.price === 'number' ? product.price : parseFloat(String(product.price)))
+          : 0;
+        total += (isNaN(price) ? 0 : price) * item.quantity;
+      }
+    });
+    const df = store?.deliveryFee != null
+      ? (typeof store.deliveryFee === 'number' ? store.deliveryFee : parseFloat(String(store.deliveryFee)) || 0)
+      : 0;
+    if (!Number.isNaN(df) && df > 0) total += df;
+    return total;
+  };
+
+  const getSubtotal = (): number => {
+    let total = 0;
+    selectedProducts.forEach((item, productId) => {
+      const product = products.find((p) => p.id === productId);
+      if (product) {
+        const price = product.price != null 
+          ? (typeof product.price === 'number' ? product.price : parseFloat(String(product.price)))
+          : 0;
+        total += (isNaN(price) ? 0 : price) * item.quantity;
       }
     });
     return total;
@@ -251,26 +290,69 @@ export default function MenuPage({ params }: MenuPageProps) {
     );
   };
 
-  const sendWhatsAppOrder = () => {
-    if (!store || !store.whatsapp || selectedProducts.size === 0) return;
+  const sendWhatsAppOrder = async () => {
+    if (!store || !store.whatsapp || store.whatsapp.trim() === '' || selectedProducts.size === 0) return;
 
     const selectedItems: string[] = [];
+    const orderItems: { productId: string; productName: string; quantity: number; unit: string; price: number; total: number }[] = [];
     selectedProducts.forEach((item, productId) => {
       const product = products.find((p) => p.id === productId);
       if (product) {
         const unit = item.unit || product.unit || 'adet';
-        selectedItems.push(`${item.quantity} ${unit} ${product.name} - ${(product.price * item.quantity).toFixed(2)}₺`);
+        const price = product.price != null 
+          ? (typeof product.price === 'number' ? product.price : parseFloat(String(product.price)))
+          : 0;
+        const safePrice = isNaN(price) ? 0 : price;
+        const lineTotal = safePrice * item.quantity;
+        selectedItems.push(`${item.quantity} ${unit} ${product.name} - ${lineTotal.toFixed(2)}₺`);
+        orderItems.push({
+          productId: product.id,
+          productName: product.name,
+          quantity: item.quantity,
+          unit,
+          price: safePrice,
+          total: lineTotal,
+        });
       }
     });
 
-    let message = `Merhaba, sipariş vermek istiyorum:\n\n${selectedItems.join('\n')}\n\nToplam: ${getTotalPrice().toFixed(2)}₺`;
+    const subtotal = getSubtotal();
+    const dfRaw = store?.deliveryFee != null
+      ? (typeof store.deliveryFee === 'number' ? store.deliveryFee : parseFloat(String(store.deliveryFee)) || 0)
+      : 0;
+    const deliveryFee = !Number.isNaN(dfRaw) && dfRaw > 0 ? dfRaw : 0;
+    const total = subtotal + deliveryFee;
 
-    // Add address if provided
+    // Önce siparişi veritabanına kaydet (dashboard Toplam Sipariş için)
+        const storeSlug = store?.slug;
+        if (storeSlug) {
+          try {
+            await fetch('/api/orders', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                storeSlug,
+                items: orderItems,
+                total: subtotal,
+                finalTotal: total,
+                address: address.trim() || undefined,
+              }),
+            });
+          } catch (e) {
+            console.error('Error saving order:', e);
+          }
+        }
+
+    let message = `Merhaba, sipariş vermek istiyorum:\n\n${selectedItems.join('\n')}`;
+    if (deliveryFee > 0) {
+      message += `\n\n🚚 Kurye Ücreti: ${deliveryFee.toFixed(2)}₺`;
+    }
+    message += `\n\n💳 Toplam: ${total.toFixed(2)}₺`;
+
     if (address.trim()) {
       message += `\n\n📍 Adres:\n${address.trim()}`;
     }
 
-    // Add location if available
     if (location) {
       const googleMapsUrl = `https://www.google.com/maps?q=${location.lat},${location.lng}`;
       message += `\n\n🗺️ Konum: ${googleMapsUrl}`;
@@ -278,8 +360,7 @@ export default function MenuPage({ params }: MenuPageProps) {
 
     const whatsappUrl = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
-    
-    // Close modal and reset
+
     setShowOrderModal(false);
     setAddress('');
     setLocation(null);
@@ -291,7 +372,7 @@ export default function MenuPage({ params }: MenuPageProps) {
   };
 
   // Apply theme
-  const themeId = store?.themeId || getThemeId();
+  const themeId = store?.themeId || 'modern-blue';
   const theme = getTheme(themeId);
 
   // Filter products
@@ -318,23 +399,39 @@ export default function MenuPage({ params }: MenuPageProps) {
     );
   }
 
-  if (!store) {
-    // Store bulunamadıysa, slug'dan default store oluştur
-    const defaultStore: Store = {
-      slug: slug,
-      name: slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-      themeId: getThemeId(),
-    };
-    setStore(defaultStore);
+  if (storeNotFound || !store) {
+    const t = getTheme('modern-blue');
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ backgroundColor: t.background }}
+      >
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">🔍</div>
+          <h2 className="text-2xl font-bold mb-2" style={{ color: t.text }}>
+            Mağaza bulunamadı
+          </h2>
+          <p style={{ color: t.text, opacity: 0.8 }}>
+            Bu mağaza artık mevcut değil veya link yanlış olabilir.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (trialExpired && store) {
     return (
       <div
         className="min-h-screen flex items-center justify-center px-4"
         style={{ backgroundColor: theme.background }}
       >
-        <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">⏳</div>
-          <h2 className="text-2xl font-bold mb-2" style={{ color: theme.text }}>
-            Yükleniyor...
+        <div className="text-center max-w-lg">
+          <div className="text-6xl mb-6">🚧</div>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-3" style={{ color: theme.text }}>
+            {store.name} – Online Sipariş
+          </h1>
+          <h2 className="text-xl sm:text-2xl font-semibold" style={{ color: theme.text }}>
+            Çok yakında sizlerleyiz
           </h2>
         </div>
       </div>
@@ -360,79 +457,124 @@ export default function MenuPage({ params }: MenuPageProps) {
     );
   }
 
+  if (store.sector === 'tekel' && ageDeclined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: theme.background }}>
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">🚫</div>
+          <h2 className="text-xl font-bold mb-2" style={{ color: theme.text }}>
+            18 yaş altına satış yapılmamaktadır
+          </h2>
+          <p className="text-sm mb-6" style={{ color: theme.text, opacity: 0.8 }}>
+            Bu mağazadan 18 yaşından küçükler alışveriş yapamaz.
+          </p>
+          <a
+            href="/"
+            className="inline-block px-6 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90"
+            style={{ backgroundColor: theme.primary, color: '#fff' }}
+          >
+            Ana sayfaya dön
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (store.sector === 'tekel' && !ageConfirmed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: theme.background }}>
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">🔞</div>
+          <h2 className="text-xl font-bold mb-2" style={{ color: theme.text }}>
+            Bu mağaza 18 yaş altına satış yapmamaktadır
+          </h2>
+          <p className="text-sm mb-6" style={{ color: theme.text, opacity: 0.8 }}>
+            18 yaşından büyük müsünüz? Devam etmek için onaylayın.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  if (typeof window !== 'undefined' && slug) sessionStorage.setItem(`tekel_age_${slug}`, '1');
+                } catch (_) {}
+                setAgeConfirmed(true);
+              }}
+              className="px-6 py-3 rounded-lg font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: theme.primary }}
+            >
+              Evet, 18 yaşından büyüğüm
+            </button>
+            <button
+              type="button"
+              onClick={() => setAgeDeclined(true)}
+              className="px-6 py-3 rounded-lg font-semibold bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors"
+            >
+              Hayır, 18 yaşından küçüğüm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: theme.background }}>
-      {/* Banner Header */}
+      {/* Banner Header: logo + store name overlay */}
       <header className="relative">
         {store.banner ? (
-          <div className="relative rounded-b-3xl overflow-hidden shadow-md">
+          <div className="relative rounded-b-3xl overflow-hidden shadow-md min-h-[12rem]">
             <img
               src={store.banner}
-              alt={store.name}
+              alt="Banner"
               className="w-full h-48 object-cover"
               onError={(e) => {
-                // Fallback to gradient if banner fails to load
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
                 const parent = target.parentElement;
                 if (parent) {
                   parent.className = parent.className.replace('overflow-hidden', '');
                   parent.style.background = `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`;
+                  parent.style.minHeight = '12rem';
                 }
               }}
             />
-            <div className="absolute inset-0 bg-black/20 flex items-center">
-              <div className="max-w-4xl mx-auto px-6 w-full">
-                <div className="flex items-center space-x-4">
-                  {store.logo && (
-                    <img
-                      src={store.logo}
-                      alt={store.name}
-                      className="w-16 h-16 rounded-full border-4 border-white shadow-lg object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  )}
-                  <div>
-                    <h1 className="text-3xl font-bold text-white mb-1 drop-shadow-lg">
-                      {store.name}
-                    </h1>
-                    {store.description && (
-                      <p className="text-white/90 text-sm drop-shadow">{store.description}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
+            <div className="absolute inset-0 flex items-center justify-center px-4">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white drop-shadow-md uppercase tracking-wide text-center z-0" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                {store.name} – Online Sipariş
+              </h1>
             </div>
+            {store.logo && (
+              <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 z-10">
+                <img
+                  src={store.logo}
+                  alt={store.name}
+                  className="w-[7.5rem] h-[7.5rem] sm:w-[9rem] sm:h-[9rem] rounded-full object-cover border-2 border-white/80 shadow-lg bg-white"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            )}
           </div>
         ) : (
           <div
-            className="rounded-b-3xl shadow-md px-6 py-8"
+            className="rounded-b-3xl shadow-md min-h-[12rem] relative flex items-center justify-center px-4"
             style={{
               background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%)`,
             }}
           >
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center space-x-4">
-                {store.logo && (
-                  <img
-                    src={store.logo}
-                    alt={store.name}
-                    className="w-16 h-16 rounded-full border-4 border-white shadow-lg object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                )}
-                <div>
-                  <h1 className="text-3xl font-bold text-white mb-1">{store.name}</h1>
-                  {store.description && (
-                    <p className="text-white/90 text-sm">{store.description}</p>
-                  )}
-                </div>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white drop-shadow-md uppercase tracking-wide text-center z-0" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+              {store.name}
+            </h1>
+            {store.logo && (
+              <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 z-10">
+                <img
+                  src={store.logo}
+                  alt={store.name}
+                  className="w-[7.5rem] h-[7.5rem] sm:w-[9rem] sm:h-[9rem] rounded-full object-cover border-2 border-white/80 shadow-lg bg-white"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
               </div>
-            </div>
+            )}
           </div>
         )}
       </header>
@@ -528,7 +670,14 @@ export default function MenuPage({ params }: MenuPageProps) {
                   key={product.id}
                   className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
                 >
-                  {product.image && (
+                  {is18PlusProduct(product) ? (
+                    <div
+                      className="w-full h-40 flex items-center justify-center bg-gray-800 text-white font-bold text-2xl sm:text-3xl"
+                      aria-label="18 yaş üzeri ürün"
+                    >
+                      +18
+                    </div>
+                  ) : product.image ? (
                     <img
                       src={product.image}
                       alt={product.name}
@@ -537,17 +686,23 @@ export default function MenuPage({ params }: MenuPageProps) {
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}
                     />
-                  )}
+                  ) : null}
                   <div className="p-4">
                     <h3 className="text-base font-bold mb-1 text-gray-900 line-clamp-2" style={{ minHeight: '2.5rem' }}>
                       {product.name}
                     </h3>
                     <p className="text-xl font-bold mb-2" style={{ color: theme.primary }}>
-                      {product.price.toFixed(2)} ₺/{unit}
+                      {(() => {
+                        const price = product.price != null 
+                          ? (typeof product.price === 'number' ? product.price : parseFloat(String(product.price))) 
+                          : 0;
+                        const safePrice = (price != null && typeof price === 'number' && !isNaN(price)) ? price : 0;
+                        return safePrice.toFixed(2);
+                      })()} ₺/{unit}
                     </p>
-                    {product.stock !== undefined && (
+                    {product.stock != null && typeof product.stock === 'number' && (
                       <p className="text-xs text-gray-500 mb-3">
-                        Stok: {product.stock.toFixed(1)} {unit}
+                        Stok: {product.stock != null && typeof product.stock === 'number' ? product.stock.toFixed(1) : '0.0'} {unit}
                       </p>
                     )}
                     {quantity > 0 ? (
@@ -605,15 +760,15 @@ export default function MenuPage({ params }: MenuPageProps) {
                 {getTotalCount()} ürün
               </p>
               <p className="text-xl font-bold" style={{ color: theme.text }}>
-                {getTotalPrice().toFixed(2)} ₺
+                {(getTotalPrice() || 0).toFixed(2)} ₺
               </p>
             </div>
             <button
               onClick={openOrderModal}
-              disabled={!store.whatsapp}
+              disabled={!store?.whatsapp || store.whatsapp.trim() === ''}
               className="px-6 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               style={{
-                backgroundColor: store.whatsapp ? theme.primary : theme.text,
+                backgroundColor: (store?.whatsapp && store.whatsapp.trim() !== '') ? theme.primary : theme.text,
                 color: '#ffffff',
               }}
             >
@@ -662,14 +817,32 @@ export default function MenuPage({ params }: MenuPageProps) {
                   return (
                     <div key={productId} className="flex justify-between">
                       <span>{item.quantity} {unit} {product.name}</span>
-                      <span>{(product.price * item.quantity).toFixed(2)} ₺</span>
+                      <span>{(() => {
+                        const price = product.price != null 
+                          ? (typeof product.price === 'number' ? product.price : parseFloat(String(product.price)))
+                          : 0;
+                        const safePrice = isNaN(price) ? 0 : price;
+                        return (safePrice * item.quantity).toFixed(2);
+                      })()} ₺</span>
                     </div>
                   );
                 })}
               </div>
-              <div className="mt-3 pt-3 border-t flex justify-between font-bold" style={{ borderColor: theme.text, opacity: 0.2 }}>
-                <span style={{ color: theme.text }}>Toplam:</span>
-                <span style={{ color: theme.primary }}>{getTotalPrice().toFixed(2)} ₺</span>
+              {(() => {
+                const df = store?.deliveryFee != null
+                  ? (typeof store.deliveryFee === 'number' ? store.deliveryFee : parseFloat(String(store.deliveryFee)) || 0)
+                  : 0;
+                const showKurye = !Number.isNaN(df) && df > 0;
+                return showKurye ? (
+                  <div className="mt-2 pt-2 border-t border-gray-300 flex justify-between text-sm">
+                    <span style={{ color: theme.text }}>🚚 Kurye Ücreti:</span>
+                    <span style={{ color: theme.text }}>{df.toFixed(2)} ₺</span>
+                  </div>
+                ) : null;
+              })()}
+              <div className="mt-3 pt-3 border-t border-gray-300 flex justify-between font-bold">
+                <span style={{ color: theme.text }}>💳 Toplam:</span>
+                <span style={{ color: theme.primary }}>{(getTotalPrice() || 0).toFixed(2)} ₺</span>
               </div>
             </div>
 
@@ -758,7 +931,7 @@ export default function MenuPage({ params }: MenuPageProps) {
                     🗺️ Konumu Haritada Aç
                   </a>
                   <p className="text-xs" style={{ color: theme.text, opacity: 0.7 }}>
-                    Enlem: {location.lat.toFixed(6)}, Boylam: {location.lng.toFixed(6)}
+                    Enlem: {(location.lat || 0).toFixed(6)}, Boylam: {(location.lng || 0).toFixed(6)}
                   </p>
                 </div>
               )}
@@ -767,7 +940,7 @@ export default function MenuPage({ params }: MenuPageProps) {
             {/* Submit Button */}
             <button
               onClick={sendWhatsAppOrder}
-              disabled={!store.whatsapp}
+              disabled={!store?.whatsapp || store.whatsapp.trim() === ''}
               className="w-full py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               style={{
                 backgroundColor: store.whatsapp ? theme.primary : theme.text,

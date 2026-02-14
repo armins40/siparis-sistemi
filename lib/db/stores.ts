@@ -7,7 +7,8 @@ export async function getStoreFromDB(slug: string): Promise<Store | null> {
     const result = await sql`
       SELECT 
         slug, name, description, logo, banner,
-        address, phone, whatsapp, theme_id as "themeId", sector
+        address, phone, whatsapp, theme_id as "themeId", sector,
+        delivery_fee as "deliveryFee"
       FROM stores
       WHERE slug = ${slug}
       LIMIT 1
@@ -29,7 +30,7 @@ export async function createStoreInDB(store: Store): Promise<boolean> {
     await sql`
       INSERT INTO stores (
         slug, name, description, logo, banner,
-        address, phone, whatsapp, theme_id, sector
+        address, phone, whatsapp, theme_id, sector, delivery_fee
       ) VALUES (
         ${store.slug},
         ${store.name},
@@ -40,7 +41,8 @@ export async function createStoreInDB(store: Store): Promise<boolean> {
         ${store.phone || null},
         ${store.whatsapp || null},
         ${store.themeId || 'modern-blue'},
-        ${store.sector || null}
+        ${store.sector || null},
+        ${store.deliveryFee || null}
       )
       ON CONFLICT (slug) DO UPDATE SET
         name = EXCLUDED.name,
@@ -52,6 +54,7 @@ export async function createStoreInDB(store: Store): Promise<boolean> {
         whatsapp = EXCLUDED.whatsapp,
         theme_id = EXCLUDED.theme_id,
         sector = EXCLUDED.sector,
+        delivery_fee = EXCLUDED.delivery_fee,
         updated_at = NOW()
     `;
     return true;
@@ -75,12 +78,23 @@ export async function updateStoreInDB(store: Store): Promise<boolean> {
         whatsapp = ${store.whatsapp || null},
         theme_id = ${store.themeId || 'modern-blue'},
         sector = ${store.sector || null},
+        delivery_fee = ${store.deliveryFee || null},
         updated_at = NOW()
       WHERE slug = ${store.slug}
     `;
     return true;
   } catch (error) {
     console.error('Error updating store in DB:', error);
+    return false;
+  }
+}
+
+export async function deleteStoreFromDB(slug: string): Promise<boolean> {
+  try {
+    const r = await sql`DELETE FROM stores WHERE slug = ${slug}`;
+    return (r.rowCount ?? 0) > 0;
+  } catch (error) {
+    console.error('Error deleting store from DB:', error);
     return false;
   }
 }

@@ -57,8 +57,6 @@ export async function POST(request: NextRequest) {
     });
     */
 
-    // For now, log the email (remove in production)
-    console.log('Email to send:', emailContent);
 
     // Return success response
     return NextResponse.json(

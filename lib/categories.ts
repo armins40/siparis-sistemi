@@ -99,3 +99,40 @@ export function reorderCategories(categoryIds: string[]): boolean {
   saveCategoriesArray(reordered);
   return true;
 }
+
+// Toplu kategori ekleme fonksiyonu
+export function addBulkCategories(categoryNames: string[]): { added: number; skipped: number } {
+  const categories = getCategoriesArray();
+  const existingNames = new Set(categories.map(c => c.name.toLowerCase()));
+  let added = 0;
+  let skipped = 0;
+  
+  categoryNames.forEach(name => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      skipped++;
+      return;
+    }
+    
+    if (existingNames.has(trimmedName.toLowerCase())) {
+      skipped++;
+      return;
+    }
+    
+    const newCategory: Category = {
+      id: `cat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      name: trimmedName,
+      order: categories.length + added,
+    };
+    
+    categories.push(newCategory);
+    existingNames.add(trimmedName.toLowerCase());
+    added++;
+  });
+  
+  if (added > 0) {
+    saveCategoriesArray(categories);
+  }
+  
+  return { added, skipped };
+}

@@ -4,14 +4,11 @@ import { verifyCode, isEmailOrPhoneVerified, getVerificationCodesArray } from '@
 export async function POST(request: NextRequest) {
   try {
     let body;
-    let rawBody;
     try {
-      rawBody = await request.text();
-      console.log('📥 Raw request body:', rawBody);
+      const rawBody = await request.text();
       body = JSON.parse(rawBody);
     } catch (parseError) {
-      console.error('❌ Request body parse error:', parseError);
-      console.error('Raw body:', rawBody);
+      console.error('Request body parse error:', parseError);
       return NextResponse.json(
         { error: 'Geçersiz istek formatı', details: process.env.NODE_ENV === 'development' ? String(parseError) : undefined },
         { status: 400 }
@@ -19,8 +16,6 @@ export async function POST(request: NextRequest) {
     }
     
     const { email, phone, code, type } = body;
-    
-    console.log('📥 Verification verify request:', { email, phone, code, type, body });
 
     // Type kontrolü
     if (type !== 'email' && type !== 'phone') {
@@ -42,10 +37,7 @@ export async function POST(request: NextRequest) {
       ? email?.trim().toLowerCase() 
       : phone?.trim();
 
-    console.log('📧 Normalized email/phone:', { emailOrPhone, originalEmail: email, originalPhone: phone, type });
-
     if (!emailOrPhone) {
-      console.error('❌ Email/Phone missing:', { email, phone, type });
       return NextResponse.json(
         { 
           error: type === 'email' ? 'E-posta adresi gerekli' : 'Telefon numarası gerekli',
@@ -67,36 +59,6 @@ export async function POST(request: NextRequest) {
 
     // Kodu doğrula
     const isValid = verifyCode(emailOrPhone, normalizedCode, type);
-    
-    // Debug için detaylı log
-    if (!isValid) {
-      console.log('❌ Verification failed:', {
-        emailOrPhone,
-        normalizedCode,
-        originalCode: code,
-        type,
-        timestamp: new Date().toISOString(),
-      });
-      
-      // Tüm kodları kontrol et (debug için)
-      const codes = getVerificationCodesArray();
-      const matchingCodes = codes.filter(c => {
-        if (c.type !== type) return false;
-        const codeValue = type === 'email' ? c.email : c.phone;
-        if (!codeValue) return false;
-        return type === 'email' 
-          ? codeValue.toLowerCase() === emailOrPhone
-          : codeValue === emailOrPhone;
-      });
-      console.log('📋 Matching codes for', emailOrPhone, ':', matchingCodes.map(c => ({
-        code: c.code,
-        expiresAt: c.expiresAt,
-        verified: c.verified,
-        createdAt: c.createdAt,
-        email: c.email,
-        phone: c.phone,
-      })));
-    }
 
     if (!isValid) {
       return NextResponse.json(

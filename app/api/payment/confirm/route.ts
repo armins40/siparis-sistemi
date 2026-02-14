@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { completePaymentIntent, failPaymentIntent, getActiveSubscription } from '@/lib/subscription';
 import { updateUser } from '@/lib/admin';
+import { getSetting } from '@/lib/db/settings';
+import { getUserByIdFromDB } from '@/lib/db/users';
+import { createAffiliateCommission } from '@/lib/affiliate';
+import { createAffiliateNotification } from '@/lib/affiliate-analytics';
 import type { User } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
@@ -8,7 +12,7 @@ export async function POST(request: NextRequest) {
   
   try {
     const body = await request.json();
-    const { paymentIntentId: intentId, paymentMethod, userId } = body;
+    const { paymentIntentId: intentId, paymentMethod, userId, plan, amount } = body;
     paymentIntentId = intentId;
 
     if (!paymentIntentId || !userId) {
@@ -53,6 +57,29 @@ export async function POST(request: NextRequest) {
         isActive: true,
         paymentMethodId: paymentMethod,
       } as Partial<User>);
+    }
+
+    // Affiliate komisyonu: KDV sonrası tutar üzerinden (yıllık %20, aylık %10)
+    const dbUser = await getUserByIdFromDB(userId);
+    const affiliateId = dbUser?.referredByAffiliateId;
+    const planForCommission = plan || subscription?.plan;
+    const amountGross = typeof amount === 'number' && amount > 0 ? amount : subscription?.amount;
+    if (affiliateId && planForCommission && amountGross) {
+      const kdvRate = parseFloat((await getSetting('kdv_rate')) || '20') || 20;
+      await createAffiliateCommission({
+        affiliateId,
+        referredUserId: userId,
+        plan: planForCommission as 'monthly' | '6month' | 'yearly',
+        amountGross,
+        kdvRate,
+        paymentType: 'first',
+      });
+      await createAffiliateNotification(
+        affiliateId,
+        'new_sale',
+        'Yeni satış geldi',
+        `${planForCommission} paket satışı kaydedildi. Komisyonunuz 7 gün güvenlik süresi sonrası çekilebilir olacak.`
+      ).catch(() => {});
     }
 
     return NextResponse.json(

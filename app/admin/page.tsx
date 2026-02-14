@@ -2,16 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  getAllUsers,
-  getAllCoupons,
-  getAllOrders,
-  getSalesAnalytics,
-  isAdminAuthenticated,
-} from '@/lib/admin';
-import { getAllProducts } from '@/lib/products';
-import { getAllCategories } from '@/lib/categories';
-import type { User, Coupon, Order } from '@/lib/types';
+import { isAdminAuthenticated } from '@/lib/admin';
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState({
@@ -21,37 +12,94 @@ export default function AdminDashboardPage() {
     totalRevenue: 0,
     totalProducts: 0,
     totalCategories: 0,
+    publishedProducts: 0,
     totalCoupons: 0,
     activeCoupons: 0,
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdminAuthenticated()) return;
 
-    const updateStats = () => {
-      const users = getAllUsers();
-      const coupons = getAllCoupons();
-      const orders = getAllOrders();
-      const analytics = getSalesAnalytics('monthly');
-      const products = getAllProducts();
-      const categories = getAllCategories();
-
-      setStats({
-        totalUsers: users.length,
-        activeUsers: users.filter(u => u.isActive).length,
-        totalOrders: orders.length,
-        totalRevenue: analytics.totalRevenue,
-        totalProducts: products.length,
-        totalCategories: categories.length,
-        totalCoupons: coupons.length,
-        activeCoupons: coupons.filter(c => c.isActive && new Date(c.validUntil) > new Date()).length,
-      });
+    const updateStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch all stats from database via API
+        const response = await fetch('/api/admin/stats');
+        
+        if (!response.ok) {
+          throw new Error(`API responded with status ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.stats) {
+          setStats({
+            totalUsers: Number(result.stats.totalUsers) || 0,
+            activeUsers: Number(result.stats.activeUsers) || 0,
+            totalOrders: Number(result.stats.totalOrders) || 0,
+            totalRevenue: Number(result.stats.totalRevenue) || 0,
+            totalProducts: Number(result.stats.totalProducts) || 0,
+            totalCategories: Number(result.stats.totalCategories) || 0,
+            publishedProducts: Number(result.stats.publishedProducts) || 0,
+            totalCoupons: Number(result.stats.totalCoupons) || 0,
+            activeCoupons: Number(result.stats.activeCoupons) || 0,
+          });
+        } else {
+          throw new Error(result.error || 'Stats could not be loaded');
+        }
+      } catch (err: any) {
+        console.error('Error loading stats from API:', err);
+        setError(err?.message || 'İstatistikler yüklenirken bir hata oluştu');
+      } finally {
+        setLoading(false);
+      }
     };
 
     updateStats();
-    const interval = setInterval(updateStats, 5000); // Her 5 saniyede bir güncelle
+    const interval = setInterval(updateStats, 60000); // Her 60 saniyede bir güncelle
     return () => clearInterval(interval);
   }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Genel Bakış</h1>
+          <p className="text-gray-600 mt-1">Admin paneli özet istatistikleri</p>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Yükleniyor...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Genel Bakış</h1>
+          <p className="text-gray-600 mt-1">Admin paneli özet istatistikleri</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">❌ {error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+          >
+            Yeniden Dene
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -99,6 +147,7 @@ export default function AdminDashboardPage() {
                 <p className="text-sm font-medium text-gray-600">Toplam Ürün</p>
                 <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalProducts}</p>
                 <p className="text-xs text-gray-500 mt-1">{stats.totalCategories} kategori</p>
+                <p className="text-xs text-orange-600 mt-1">{stats.publishedProducts || 0} yayında</p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <span className="text-2xl">📦</span>

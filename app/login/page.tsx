@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { userLogin, userLoginAsync, getCurrentUser, checkUserSubscription } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [emailOrPhone, setEmailOrPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [type, setType] = useState<'email' | 'phone'>('email');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -17,12 +17,10 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Eğer zaten giriş yapılmışsa dashboard'a yönlendir
-    // Verified kontrolü yapmıyoruz çünkü eski kayıtlar için verified olmayabilir
     if (typeof window !== 'undefined') {
       const user = getCurrentUser();
-      if (user && user.isActive) {
-        router.replace('/dashboard');
+      if (user && user.isActive && user.id) {
+        router.replace(`/dashboard/${user.id}`);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -33,8 +31,8 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    if (!emailOrPhone.trim()) {
-      setError(`${type === 'email' ? 'E-posta' : 'Telefon'} adresi gerekli`);
+    if (!email.trim()) {
+      setError('E-posta adresi gerekli');
       setIsLoading(false);
       return;
     }
@@ -45,32 +43,56 @@ export default function LoginPage() {
       return;
     }
 
-    // Email/Phone'u normalize et
-    const normalizedEmailOrPhone = type === 'email' 
-      ? emailOrPhone.trim().toLowerCase() 
-      : emailOrPhone.trim();
+    // Email'i normalize et
+    const normalizedEmail = email.trim().toLowerCase();
     
-    // Giriş kontrolü (şifre ile) - önce database, sonra localStorage
     try {
-      const user = await userLoginAsync(normalizedEmailOrPhone, password.trim(), type);
+      const { user, error } = await userLoginAsync(normalizedEmail, password.trim(), 'email');
+      
+      if (error === 'not_active') {
+        setError('Hesabınız henüz aktif değil. Kayıt sonrası e-posta veya telefondan doğrulama adımını tamamlayın.');
+        setIsLoading(false);
+        return;
+      }
+      if (error === 'not_found' || error === 'invalid_password') {
+        setError('E-posta adresi veya şifre hatalı.');
+        setIsLoading(false);
+        return;
+      }
       
       if (user) {
-        // Abonelik kontrolü
-        const subscription = checkUserSubscription(user.id);
-        
-        if (!subscription.hasActiveSubscription && user.plan !== 'free') {
-          // Abonelik süresi dolmuş, yenileme sayfasına yönlendir
-          router.push(`/signup?plan=${user.plan}`);
+        if (user.plan === 'trial' && user.expiresAt) {
+          const now = new Date();
+          const expiresAt = new Date(user.expiresAt);
+          const isExpired = expiresAt <= now;
+          
+          if (isExpired) {
+            // Trial süresi dolmuş, ödeme sayfasına yönlendir
+            router.push(`/dashboard/${user.id}/payment`);
+          } else {
+            // Dashboard'a yönlendir (URL'de user ID ile)
+            router.push(`/dashboard/${user.id}`);
+          }
+        } else if (user.plan !== 'free' && user.plan !== 'trial') {
+          // Diğer planlar için subscription kontrolü
+          const subscription = checkUserSubscription(user.id);
+          
+          if (!subscription.hasActiveSubscription) {
+            // Abonelik süresi dolmuş, yenileme sayfasına yönlendir
+            router.push(`/signup?plan=${user.plan}`);
+          } else {
+            // Dashboard'a yönlendir (URL'de user ID ile)
+            router.push(`/dashboard/${user.id}`);
+          }
         } else {
-          // Dashboard'a yönlendir
-          router.push('/dashboard');
+          router.push(`/dashboard/${user.id}`);
         }
       } else {
-        setError(`${type === 'email' ? 'E-posta' : 'Telefon'} adresi veya şifre hatalı`);
+        setError('E-posta adresi veya şifre hatalı.');
         setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (err) {
+      console.error('Login error:', err);
       setError('Giriş yapılırken bir hata oluştu. Lütfen tekrar deneyin.');
       setIsLoading(false);
     }
@@ -85,7 +107,35 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAFAFA' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#FAFAFA' }}>
+      {/* Header with Logo */}
+      <header className="w-full border-b bg-white sticky top-0 z-50 shadow-sm mb-8">
+        <div className="max-w-7xl mx-auto px-2 md:px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-start md:justify-center h-20">
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/logo.svg"
+                alt="Siparis Sistemi"
+                width={531}
+                height={354}
+                className="hidden md:block"
+                style={{ width: '380px', height: 'auto' }}
+                priority
+              />
+              <Image
+                src="/logo.svg"
+                alt="Siparis Sistemi"
+                width={531}
+                height={354}
+                className="md:hidden"
+                style={{ width: '200px', height: 'auto' }}
+                priority
+              />
+            </Link>
+          </div>
+        </div>
+      </header>
+
       <div className="max-w-md w-full mx-4">
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-8">
@@ -105,36 +155,19 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="login-type" className="block text-sm font-medium mb-2" style={{ color: '#555555' }}>
-                Giriş Tipi
-              </label>
-              <select
-                id="login-type"
-                name="login-type"
-                value={type}
-                onChange={(e) => setType(e.target.value as 'email' | 'phone')}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
-                style={{ borderColor: '#AF948F' }}
-              >
-                <option value="email">E-posta ile Giriş</option>
-                <option value="phone">Telefon ile Giriş</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="emailOrPhone" className="block text-sm font-medium mb-2" style={{ color: '#555555' }}>
-                {type === 'email' ? 'E-posta Adresi' : 'Telefon Numarası'}
+              <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: '#555555' }}>
+                E-posta Adresi
               </label>
               <input
-                type={type === 'email' ? 'email' : 'tel'}
-                id="emailOrPhone"
-                name="emailOrPhone"
-                value={emailOrPhone}
-                onChange={(e) => setEmailOrPhone(e.target.value)}
+                type="email"
+                id="email"
+                name="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                 style={{ borderColor: '#AF948F' }}
                 required
-                placeholder={type === 'email' ? 'ornek@email.com' : '05XX XXX XX XX'}
+                placeholder="ornek@email.com"
                 autoFocus
               />
             </div>

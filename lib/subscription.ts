@@ -104,25 +104,27 @@ export function cancelSubscription(subscriptionId: string): boolean {
   return true;
 }
 
-// Ödeme intent oluştur
+// Ödeme intent oluştur (amount verilmezse plan fiyatı kullanılır; KDV dahil tutar geçilebilir)
 export function createPaymentIntent(
   userId: string,
-  plan: 'monthly' | '6month' | 'yearly'
+  plan: 'monthly' | '6month' | 'yearly',
+  amount?: number
 ): PaymentIntent {
   const intents = getPaymentIntentsArray();
-  
+  const finalAmount = amount != null && amount > 0 ? amount : PLAN_PRICES[plan];
+
   const newIntent: PaymentIntent = {
     id: `pi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     userId,
     plan,
-    amount: PLAN_PRICES[plan],
+    amount: finalAmount,
     status: 'pending',
     createdAt: new Date().toISOString(),
   };
-  
+
   intents.push(newIntent);
   savePaymentIntentsArray(intents);
-  
+
   return newIntent;
 }
 

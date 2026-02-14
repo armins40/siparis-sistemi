@@ -14,10 +14,33 @@ export async function getAllProductsFromDB(): Promise<Product[]> {
       ORDER BY created_at DESC
     `;
     
-    return result.rows.map(row => ({
-      ...row,
-      createdAt: new Date(row.createdAt).toISOString(),
-    })) as Product[];
+    return result.rows.map(row => {
+      let price = row.price;
+      if (price == null) {
+        price = 0;
+      } else if (typeof price === 'string') {
+        price = parseFloat(price) || 0;
+      } else if (typeof price !== 'number') {
+        price = parseFloat(String(price)) || 0;
+      }
+      // Normalize stock
+      let stock = row.stock;
+      if (stock != null) {
+        if (typeof stock === 'string') {
+          stock = parseFloat(stock) || null;
+        } else if (typeof stock !== 'number') {
+          stock = parseFloat(String(stock)) || null;
+        }
+        if (stock !== null && isNaN(stock)) stock = null;
+      }
+      
+      return {
+        ...row,
+        price,
+        stock: stock ?? undefined,
+        createdAt: new Date(row.createdAt).toISOString(),
+      };
+    }) as Product[];
   } catch (error) {
     console.error('Error fetching products from DB:', error);
     return [];
@@ -53,10 +76,33 @@ export async function getPublishedProductsFromDB(storeSlug?: string): Promise<Pr
       `;
     }
     
-    return result.rows.map(row => ({
-      ...row,
-      createdAt: new Date(row.createdAt).toISOString(),
-    })) as Product[];
+    return result.rows.map(row => {
+      let price = row.price;
+      if (price == null) {
+        price = 0;
+      } else if (typeof price === 'string') {
+        price = parseFloat(price) || 0;
+      } else if (typeof price !== 'number') {
+        price = parseFloat(String(price)) || 0;
+      }
+      // Normalize stock
+      let stock = row.stock;
+      if (stock != null) {
+        if (typeof stock === 'string') {
+          stock = parseFloat(stock) || null;
+        } else if (typeof stock !== 'number') {
+          stock = parseFloat(String(stock)) || null;
+        }
+        if (stock !== null && isNaN(stock)) stock = null;
+      }
+      
+      return {
+        ...row,
+        price,
+        stock: stock ?? undefined,
+        createdAt: new Date(row.createdAt).toISOString(),
+      };
+    }) as Product[];
   } catch (error) {
     console.error('Error fetching published products from DB:', error);
     return [];
@@ -76,13 +122,69 @@ export async function getProductsByUserIdFromDB(userId: string): Promise<Product
       ORDER BY created_at DESC
     `;
     
-    return result.rows.map(row => ({
-      ...row,
-      createdAt: new Date(row.createdAt).toISOString(),
-    })) as Product[];
+    return result.rows.map(row => {
+      let price = row.price;
+      if (price == null) {
+        price = 0;
+      } else if (typeof price === 'string') {
+        price = parseFloat(price) || 0;
+      } else if (typeof price !== 'number') {
+        price = parseFloat(String(price)) || 0;
+      }
+      // Normalize stock
+      let stock = row.stock;
+      if (stock != null) {
+        if (typeof stock === 'string') {
+          stock = parseFloat(stock) || null;
+        } else if (typeof stock !== 'number') {
+          stock = parseFloat(String(stock)) || null;
+        }
+        if (stock !== null && isNaN(stock)) stock = null;
+      }
+      
+      return {
+        ...row,
+        price,
+        stock: stock ?? undefined,
+        createdAt: new Date(row.createdAt).toISOString(),
+      };
+    }) as Product[];
   } catch (error) {
     console.error('Error fetching user products from DB:', error);
     return [];
+  }
+}
+
+export async function getProductByIdFromDB(productId: string): Promise<Product | null> {
+  try {
+    const result = await sql`
+      SELECT 
+        id, name, price, category, image,
+        is_published as "isPublished", stock, unit,
+        created_at as "createdAt", sector,
+        created_by as "createdBy", user_id as "userId"
+      FROM products
+      WHERE id = ${productId}
+      LIMIT 1
+    `;
+    const row = result.rows[0];
+    if (!row) return null;
+    let price = row.price;
+    if (price == null) price = 0;
+    else if (typeof price === 'string') price = parseFloat(price) || 0;
+    else if (typeof price !== 'number') price = parseFloat(String(price)) || 0;
+    let stock = row.stock;
+    if (stock != null && typeof stock === 'string') stock = parseFloat(stock) || null;
+    else if (stock != null && typeof stock !== 'number') stock = parseFloat(String(stock)) || null;
+    return {
+      ...row,
+      price,
+      stock: stock ?? undefined,
+      createdAt: new Date(row.createdAt).toISOString(),
+    } as Product;
+  } catch (error) {
+    console.error('Error fetching product by id from DB:', error);
+    return null;
   }
 }
 
@@ -94,7 +196,6 @@ export async function getProductsByStoreSlugFromDB(storeSlug: string): Promise<P
       return [];
     }
     
-    console.log('🔍 Fetching products for store_slug:', storeSlug);
     const result = await sql`
       SELECT 
         id, name, price, category, image,
@@ -106,15 +207,21 @@ export async function getProductsByStoreSlugFromDB(storeSlug: string): Promise<P
       ORDER BY created_at DESC
     `;
     
-    console.log('📦 Found products:', result.rows.length);
-    if (result.rows.length > 0) {
-      console.log('📦 Sample product:', result.rows[0]);
-    }
-    
-    return result.rows.map(row => ({
-      ...row,
-      createdAt: new Date(row.createdAt).toISOString(),
-    })) as Product[];
+    return result.rows.map(row => {
+      let price = row.price;
+      if (price == null) {
+        price = 0;
+      } else if (typeof price === 'string') {
+        price = parseFloat(price) || 0;
+      } else if (typeof price !== 'number') {
+        price = parseFloat(String(price)) || 0;
+      }
+      return {
+        ...row,
+        price,
+        createdAt: new Date(row.createdAt).toISOString(),
+      };
+    }) as Product[];
   } catch (error: any) {
     console.error('❌ Error fetching store products from DB:', error);
     console.error('❌ Error message:', error?.message);
@@ -130,58 +237,201 @@ export async function getProductsByStoreSlugFromDB(storeSlug: string): Promise<P
 
 export async function createProductInDB(product: Product, storeSlug?: string): Promise<boolean> {
   try {
-    const finalStoreSlug = storeSlug || product.userId || null;
-    console.log('💾 Saving product to DB:', {
-      id: product.id,
-      name: product.name,
-      storeSlug: finalStoreSlug,
-      userId: product.userId,
-      isPublished: product.isPublished
-    });
-    
+    // Admin ürünleri için store_slug NULL olmalı (tüm kullanıcılar görecek)
+    // Normal ürünler için storeSlug veya product.userId kullan
+    const finalStoreSlug = product.createdBy === 'admin' 
+      ? null 
+      : (storeSlug || product.userId || null);
     // Check if POSTGRES_URL is set
     if (!process.env.POSTGRES_URL) {
-      console.error('❌ POSTGRES_URL environment variable is not set');
-      console.error('💡 Please add POSTGRES_URL to Vercel Environment Variables');
+      console.error('POSTGRES_URL environment variable is not set');
       return false;
     }
     
-    await sql`
-      INSERT INTO products (
-        id, name, price, category, image,
-        is_published, stock, unit,
-        created_at, sector, created_by, user_id, store_slug
-      ) VALUES (
-        ${product.id},
-        ${product.name},
-        ${product.price},
-        ${product.category},
-        ${product.image || null},
-        ${product.isPublished},
-        ${product.stock || null},
-        ${product.unit || 'adet'},
-        ${product.createdAt},
-        ${product.sector || null},
-        ${product.createdBy || 'user'},
-        ${product.userId || null},
-        ${finalStoreSlug}
-      )
-    `;
-    console.log('✅ Product saved to DB successfully');
-    return true;
-  } catch (error: any) {
-    console.error('❌ Error creating product in DB:', error);
-    console.error('❌ Error message:', error?.message);
-    console.error('❌ Error code:', error?.code);
-    console.error('❌ Full error:', JSON.stringify(error, null, 2));
-    
-    // More specific error messages
-    if (error?.message?.includes('relation') && error?.message?.includes('does not exist')) {
-      console.error('💡 Database table does not exist. Please run schema.sql in your database.');
-    } else if (error?.message?.includes('connection') || error?.code === 'ECONNREFUSED') {
-      console.error('💡 Database connection failed. Check POSTGRES_URL environment variable.');
+    // If user_id is provided, ensure user exists in database
+    if (product.userId) {
+      try {
+        const userCheck = await sql`
+          SELECT id FROM users WHERE id = ${product.userId} LIMIT 1
+        `;
+        
+        // If user doesn't exist, create a minimal user entry
+        if (userCheck.rows.length === 0) {
+          await sql`
+            INSERT INTO users (id, plan, is_active, created_at, store_slug, sector)
+            VALUES (
+              ${product.userId},
+              'trial',
+              true,
+              NOW(),
+              ${finalStoreSlug || null},
+              ${product.sector || null}
+            )
+            ON CONFLICT (id) DO NOTHING
+          `;
+        }
+      } catch (userError: any) {
+        console.warn('⚠️ Could not ensure user exists:', userError?.message);
+        // Continue anyway - might be a users table issue
+      }
     }
     
+    // If store_slug is provided, ensure store exists in database
+    if (finalStoreSlug) {
+      try {
+        // Check if store exists
+        const storeCheck = await sql`
+          SELECT slug FROM stores WHERE slug = ${finalStoreSlug} LIMIT 1
+        `;
+        
+        // If store doesn't exist, create a minimal store entry
+        if (storeCheck.rows.length === 0) {
+          const storeName = product.name ? `${product.name} Store` : 'Store';
+          await sql`
+            INSERT INTO stores (slug, name, sector, created_at)
+            VALUES (${finalStoreSlug}, ${storeName}, ${product.sector || null}, NOW())
+            ON CONFLICT (slug) DO NOTHING
+          `;
+        }
+      } catch (storeError: any) {
+        console.warn('⚠️ Could not ensure store exists:', storeError?.message);
+        // Continue anyway - might be a stores table issue
+      }
+    }
+    
+    // Try to insert or update product (UPSERT)
+    try {
+      await sql`
+        INSERT INTO products (
+          id, name, price, category, image,
+          is_published, stock, unit,
+          created_at, sector, created_by, user_id, store_slug
+        ) VALUES (
+          ${product.id},
+          ${product.name},
+          ${product.price},
+          ${product.category},
+          ${product.image || null},
+          ${product.isPublished},
+          ${product.stock || null},
+          ${product.unit || 'adet'},
+          ${product.createdAt},
+          ${product.sector || null},
+          ${product.createdBy || 'user'},
+          ${product.userId || null},
+          ${finalStoreSlug}
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          price = EXCLUDED.price,
+          category = EXCLUDED.category,
+          image = EXCLUDED.image,
+          is_published = EXCLUDED.is_published,
+          stock = EXCLUDED.stock,
+          unit = EXCLUDED.unit,
+          sector = EXCLUDED.sector,
+          created_by = EXCLUDED.created_by,
+          user_id = EXCLUDED.user_id,
+          store_slug = EXCLUDED.store_slug
+      `;
+      return true;
+    } catch (insertError: any) {
+      // If foreign key constraint fails, try with NULL user_id
+      if (insertError?.message?.includes('foreign key') || insertError?.code === '23503') {
+        if (insertError?.constraint === 'products_user_id_fkey') {
+          console.warn('⚠️ User foreign key constraint error. Trying with NULL user_id...');
+          
+          // Try inserting with NULL user_id
+          try {
+            await sql`
+              INSERT INTO products (
+                id, name, price, category, image,
+                is_published, stock, unit,
+                created_at, sector, created_by, user_id, store_slug
+              ) VALUES (
+                ${product.id},
+                ${product.name},
+                ${product.price},
+                ${product.category},
+                ${product.image || null},
+                ${product.isPublished},
+                ${product.stock || null},
+                ${product.unit || 'adet'},
+                ${product.createdAt},
+                ${product.sector || null},
+                ${product.createdBy || 'user'},
+                NULL,
+                ${finalStoreSlug}
+              )
+              ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                price = EXCLUDED.price,
+                category = EXCLUDED.category,
+                image = EXCLUDED.image,
+                is_published = EXCLUDED.is_published,
+                stock = EXCLUDED.stock,
+                unit = EXCLUDED.unit,
+                sector = EXCLUDED.sector,
+                created_by = EXCLUDED.created_by,
+                user_id = EXCLUDED.user_id,
+                store_slug = EXCLUDED.store_slug
+            `;
+            return true;
+          } catch (nullUserError: any) {
+            console.warn('⚠️ Failed even with NULL user_id:', nullUserError?.message);
+            // Continue to try without store_slug as well
+          }
+        }
+        
+        // If it's a store_slug foreign key error, try without store_slug
+        if (insertError?.constraint === 'products_store_slug_fkey') {
+          console.warn('⚠️ Store foreign key constraint error. Trying without store_slug...');
+          
+          try {
+            await sql`
+              INSERT INTO products (
+                id, name, price, category, image,
+                is_published, stock, unit,
+                created_at, sector, created_by, user_id, store_slug
+              ) VALUES (
+                ${product.id},
+                ${product.name},
+                ${product.price},
+                ${product.category},
+                ${product.image || null},
+                ${product.isPublished},
+                ${product.stock || null},
+                ${product.unit || 'adet'},
+                ${product.createdAt},
+                ${product.sector || null},
+                ${product.createdBy || 'user'},
+                ${product.userId || null},
+                NULL
+              )
+              ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                price = EXCLUDED.price,
+                category = EXCLUDED.category,
+                image = EXCLUDED.image,
+                is_published = EXCLUDED.is_published,
+                stock = EXCLUDED.stock,
+                unit = EXCLUDED.unit,
+                sector = EXCLUDED.sector,
+                created_by = EXCLUDED.created_by,
+                user_id = EXCLUDED.user_id,
+                store_slug = EXCLUDED.store_slug
+            `;
+            return true;
+          } catch (nullStoreError: any) {
+            console.warn('⚠️ Failed even with NULL store_slug:', nullStoreError?.message);
+          }
+        }
+      }
+      // Re-throw if it's not a foreign key error or all fallbacks failed
+      throw insertError;
+    }
+  } catch (error: any) {
+    console.error('Error creating product in DB:', error);
     return false;
   }
 }
@@ -215,5 +465,23 @@ export async function deleteProductFromDB(productId: string): Promise<boolean> {
   } catch (error) {
     console.error('Error deleting product from DB:', error);
     return false;
+  }
+}
+
+export async function deleteAllAdminProductsFromDB(): Promise<{ success: boolean; deletedCount: number }> {
+  try {
+    // First, count how many admin products exist
+    const countResult = await sql`
+      SELECT COUNT(*) as count FROM products WHERE created_by = 'admin'
+    `;
+    const count = parseInt(countResult.rows[0]?.count || '0', 10);
+    
+    // Delete all admin products
+    await sql`DELETE FROM products WHERE created_by = 'admin'`;
+    
+    return { success: true, deletedCount: count };
+  } catch (error) {
+    console.error('Error deleting all admin products from DB:', error);
+    return { success: false, deletedCount: 0 };
   }
 }

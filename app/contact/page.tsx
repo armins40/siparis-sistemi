@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -51,12 +52,27 @@ export default function ContactPage() {
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAFA' }}>
       {/* Header */}
       <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <h1 className="text-2xl font-bold" style={{ color: '#555555' }}>
-                Siparis
-              </h1>
+        <div className="max-w-7xl mx-auto px-2 md:px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            <Link href="/" className="flex items-center md:justify-start">
+              <Image
+                src="/logo.svg"
+                alt="Siparis Sistemi"
+                width={531}
+                height={354}
+                className="hidden md:block"
+                style={{ width: '380px', height: 'auto' }}
+                priority
+              />
+              <Image
+                src="/logo.svg"
+                alt="Siparis Sistemi"
+                width={531}
+                height={354}
+                className="md:hidden"
+                style={{ width: '200px', height: 'auto' }}
+                priority
+              />
             </Link>
             <nav className="flex items-center space-x-4">
               <Link

@@ -1,7 +1,8 @@
 // Core types for the application
 
 export type Sector = 
-  | 'bakkal' 
+  | 'kasap' 
+  | 'sarkuteri' 
   | 'tekel' 
   | 'manav' 
   | 'market' 
@@ -19,7 +20,7 @@ export interface Product {
   stock?: number; // Stok miktarı
   unit?: string; // Birim: 'kg', 'adet', 'lt', vb.
   createdAt: string;
-  sector?: Sector; // Hangi sektör için (admin eklediği ürünler için)
+  sector?: Sector | 'all'; // Hangi sektör için (admin eklediği ürünler için), 'all' = tüm sektörlerde görünür
   createdBy?: 'admin' | 'user'; // Kim ekledi (admin eklediği ürünler kullanıcıya önerilen ürünler olur)
   userId?: string; // Kullanıcı eklediğinde hangi kullanıcı (admin eklediğinde undefined)
 }
@@ -42,6 +43,7 @@ export interface Store {
   whatsapp?: string;
   themeId?: string;
   sector?: Sector; // Mağazanın sektörü
+  deliveryFee?: number; // Kurye ücreti
 }
 
 export interface Theme {
@@ -67,10 +69,11 @@ export interface User {
   createdAt: string;
   expiresAt?: string; // Plan bitiş tarihi (trial için 7 gün sonra)
   storeSlug?: string; // Kullanıcının mağaza slug'ı
-  sector?: Sector; // Kullanıcının sektörü (Bakkal, Tekel, Manav, vb.)
+  sector?: Sector; // Kullanıcının sektörü (Kasap, Şarküteri, Tekel, Manav, vb.)
   emailVerified?: boolean; // Email doğrulandı mı
   phoneVerified?: boolean; // Telefon doğrulandı mı
   paymentMethodId?: string; // Ödeme yöntemi ID (Stripe vb.)
+  referredByAffiliateId?: string; // Affiliate referansı ile geldiyse (affiliates.id)
 }
 
 export interface VerificationCode {

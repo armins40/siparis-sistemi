@@ -16,10 +16,12 @@ CREATE TABLE IF NOT EXISTS users (
   sector TEXT,
   email_verified BOOLEAN DEFAULT false,
   phone_verified BOOLEAN DEFAULT false,
-  payment_method_id TEXT
+  payment_method_id TEXT,
+  referred_by_affiliate_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_store_slug ON users(store_slug);
+CREATE INDEX IF NOT EXISTS idx_users_referred_by ON users(referred_by_affiliate_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 
@@ -35,6 +37,7 @@ CREATE TABLE IF NOT EXISTS stores (
   whatsapp TEXT,
   theme_id TEXT DEFAULT 'modern-blue',
   sector TEXT,
+  delivery_fee DECIMAL(10, 2),
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -128,3 +131,99 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
+-- Affiliates (YouTuber/promoter hesapları; müşteri hesabından ayrı)
+CREATE TABLE IF NOT EXISTS affiliates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  code TEXT UNIQUE NOT NULL,
+  iban TEXT,
+  payment_name TEXT,
+  is_suspended BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_affiliates_code ON affiliates(code);
+CREATE INDEX IF NOT EXISTS idx_affiliates_email ON affiliates(email);
+
+-- Affiliate commissions (affiliate_id = affiliates.id, referred_user_id = users.id)
+-- status: pending | approved | paid | cancelled. 7 gün güvenlik bekleme sonrası approved.
+CREATE TABLE IF NOT EXISTS affiliate_commissions (
+  id TEXT PRIMARY KEY,
+  affiliate_id TEXT NOT NULL,
+  referred_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL,
+  amount_gross DECIMAL(12,2) NOT NULL,
+  amount_after_vat DECIMAL(12,2) NOT NULL,
+  commission_rate DECIMAL(5,2) NOT NULL,
+  commission_amount DECIMAL(12,2) NOT NULL,
+  payment_type TEXT NOT NULL DEFAULT 'first',
+  status TEXT NOT NULL DEFAULT 'pending',
+  approved_at TIMESTAMP,
+  paid_at TIMESTAMP,
+  is_flagged BOOLEAN DEFAULT false,
+  flag_reason TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_commissions_affiliate ON affiliate_commissions(affiliate_id);
+CREATE INDEX IF NOT EXISTS idx_affiliate_commissions_created ON affiliate_commissions(created_at);
+
+-- Affiliate tıklama (referans linkine giriş; ip_hash ile spam kontrolü)
+CREATE TABLE IF NOT EXISTS affiliate_clicks (
+  id TEXT PRIMARY KEY,
+  affiliate_id TEXT NOT NULL,
+  ip_hash TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_clicks_affiliate ON affiliate_clicks(affiliate_id);
+CREATE INDEX IF NOT EXISTS idx_affiliate_clicks_created ON affiliate_clicks(created_at);
+
+-- Affiliate ödeme geçmişi (yapılan havale/EFT)
+CREATE TABLE IF NOT EXISTS affiliate_payments (
+  id TEXT PRIMARY KEY,
+  affiliate_id TEXT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  paid_at TIMESTAMP NOT NULL,
+  status TEXT NOT NULL DEFAULT 'completed',
+  masked_iban TEXT,
+  transaction_ref TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_payments_affiliate ON affiliate_payments(affiliate_id);
+
+-- Affiliate bildirimleri
+CREATE TABLE IF NOT EXISTS affiliate_notifications (
+  id TEXT PRIMARY KEY,
+  affiliate_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  read_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_notifications_affiliate ON affiliate_notifications(affiliate_id);
+
+-- Settings table (for global app settings)
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Push tokens for PWA FCM notifications
+CREATE TABLE IF NOT EXISTS push_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(token)
+);
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_tokens_token ON push_tokens(token);
+
+-- Insert default settings
+INSERT INTO settings (key, value) VALUES ('whatsapp_number', '905535057059')
+ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('yearly_price', '2490')
+ON CONFLICT (key) DO NOTHING;

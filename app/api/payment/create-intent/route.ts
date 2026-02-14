@@ -6,7 +6,7 @@ import type { User } from '@/lib/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, plan, email, phone } = body;
+    const { userId, plan, amount, email, phone } = body;
 
     // Validasyon
     if (!userId || !plan) {
@@ -38,8 +38,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Payment intent oluştur
-    const paymentIntent = createPaymentIntent(userId, plan);
+    // Payment intent oluştur (amount KDV dahil toplam olabilir)
+    const amountNum = typeof amount === 'number' && amount > 0 ? amount : undefined;
+    const paymentIntent = createPaymentIntent(userId, plan, amountNum);
 
     // TODO: Stripe entegrasyonu
     // Production'da Stripe Payment Intent oluşturulmalı:
