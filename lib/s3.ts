@@ -30,10 +30,14 @@ export async function deleteObjectByImageUrl(imageUrl: string | undefined): Prom
     const key = pathname.startsWith('/') ? pathname.slice(1) : pathname;
     if (!key) return;
 
+    const cloudfrontUrl = process.env.AWS_CLOUDFRONT_URL || '';
+    const cloudfrontHost = cloudfrontUrl ? new URL(cloudfrontUrl.startsWith('http') ? cloudfrontUrl : `https://${cloudfrontUrl}`).hostname : '';
+
     const isOurS3 =
       host === `${bucketName}.s3.${region}.amazonaws.com` ||
       host === `${bucketName}.s3.amazonaws.com` ||
-      host.endsWith('.s3.' + region + '.amazonaws.com');
+      host.endsWith('.s3.' + region + '.amazonaws.com') ||
+      (cloudfrontHost && host === cloudfrontHost);
 
     if (!isOurS3) return;
 

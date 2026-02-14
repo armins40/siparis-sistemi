@@ -8,7 +8,9 @@ export async function getStoreFromDB(slug: string): Promise<Store | null> {
       SELECT 
         slug, name, description, logo, banner,
         address, phone, whatsapp, theme_id as "themeId", sector,
-        delivery_fee as "deliveryFee"
+        delivery_fee as "deliveryFee",
+        opening_hours as "openingHours",
+        google_review_url as "googleReviewUrl"
       FROM stores
       WHERE slug = ${slug}
       LIMIT 1
@@ -27,10 +29,14 @@ export async function getStoreFromDB(slug: string): Promise<Store | null> {
 
 export async function createStoreInDB(store: Store): Promise<boolean> {
   try {
+    const openingHoursJson = store.openingHours && Object.keys(store.openingHours).length > 0
+      ? JSON.stringify(store.openingHours)
+      : null;
     await sql`
       INSERT INTO stores (
         slug, name, description, logo, banner,
-        address, phone, whatsapp, theme_id, sector, delivery_fee
+        address, phone, whatsapp, theme_id, sector, delivery_fee,
+        opening_hours, google_review_url
       ) VALUES (
         ${store.slug},
         ${store.name},
@@ -42,7 +48,9 @@ export async function createStoreInDB(store: Store): Promise<boolean> {
         ${store.whatsapp || null},
         ${store.themeId || 'modern-blue'},
         ${store.sector || null},
-        ${store.deliveryFee || null}
+        ${store.deliveryFee || null},
+        ${openingHoursJson}::jsonb,
+        ${store.googleReviewUrl?.trim() || null}
       )
       ON CONFLICT (slug) DO UPDATE SET
         name = EXCLUDED.name,
@@ -55,6 +63,8 @@ export async function createStoreInDB(store: Store): Promise<boolean> {
         theme_id = EXCLUDED.theme_id,
         sector = EXCLUDED.sector,
         delivery_fee = EXCLUDED.delivery_fee,
+        opening_hours = EXCLUDED.opening_hours,
+        google_review_url = EXCLUDED.google_review_url,
         updated_at = NOW()
     `;
     return true;
@@ -66,6 +76,9 @@ export async function createStoreInDB(store: Store): Promise<boolean> {
 
 export async function updateStoreInDB(store: Store): Promise<boolean> {
   try {
+    const openingHoursJson = store.openingHours && Object.keys(store.openingHours).length > 0
+      ? JSON.stringify(store.openingHours)
+      : null;
     await sql`
       UPDATE stores
       SET 
@@ -79,6 +92,8 @@ export async function updateStoreInDB(store: Store): Promise<boolean> {
         theme_id = ${store.themeId || 'modern-blue'},
         sector = ${store.sector || null},
         delivery_fee = ${store.deliveryFee || null},
+        opening_hours = ${openingHoursJson}::jsonb,
+        google_review_url = ${store.googleReviewUrl?.trim() || null},
         updated_at = NOW()
       WHERE slug = ${store.slug}
     `;

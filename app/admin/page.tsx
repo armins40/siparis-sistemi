@@ -28,7 +28,7 @@ export default function AdminDashboardPage() {
         setError(null);
         
         // Fetch all stats from database via API
-        const response = await fetch('/api/admin/stats');
+        const response = await fetch('/api/admin/stats', { credentials: 'include' });
         
         if (!response.ok) {
           throw new Error(`API responded with status ${response.status}`);

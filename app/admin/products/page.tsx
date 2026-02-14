@@ -54,7 +54,7 @@ export default function AdminProductsPage() {
       
       // Fetch admin products from database via API
       const sectorParam = selectedSector !== 'all' ? `?sector=${selectedSector}` : '';
-      const response = await fetch(`/api/admin/products${sectorParam}`);
+      const response = await fetch(`/api/admin/products${sectorParam}`, { credentials: 'include' });
       
       if (!response.ok) {
         throw new Error(`API responded with status ${response.status}`);
@@ -82,7 +82,7 @@ export default function AdminProductsPage() {
 
   const loadCategories = async () => {
     try {
-      const res = await fetch('/api/admin/categories', { cache: 'no-store' });
+      const res = await fetch('/api/admin/categories', { cache: 'no-store', credentials: 'include' });
       const data = await res.json();
       const categoryNames = (data.success && Array.isArray(data.categories))
         ? data.categories.map((c: { name: string }) => c.name)
@@ -126,12 +126,9 @@ export default function AdminProductsPage() {
         
         const response = await fetch('/api/admin/products', {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            product: updatedProduct,
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product: updatedProduct }),
+          credentials: 'include',
         });
         
         const result = await response.json();
@@ -152,12 +149,9 @@ export default function AdminProductsPage() {
         // Database'e kaydet
         const response = await fetch('/api/admin/products', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            product: newProduct,
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product: newProduct }),
+          credentials: 'include',
         });
 
         const result = await response.json();
@@ -200,6 +194,7 @@ export default function AdminProductsPage() {
       // Delete from database
       const response = await fetch(`/api/admin/products?productId=${id}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
       
       const result = await response.json();
@@ -234,6 +229,7 @@ export default function AdminProductsPage() {
       // Delete from database
       const response = await fetch('/api/admin/products/delete-all', {
         method: 'DELETE',
+        credentials: 'include',
       });
       
       const result = await response.json();
@@ -262,12 +258,9 @@ export default function AdminProductsPage() {
       
       const response = await fetch('/api/admin/products', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          product: updatedProduct,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product: updatedProduct }),
+        credentials: 'include',
       });
       
       const result = await response.json();
@@ -626,12 +619,9 @@ export default function AdminProductsPage() {
 
         const response = await fetch('/api/admin/products', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            product: newProduct,
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product: newProduct }),
+          credentials: 'include',
         });
 
         const result = await response.json();

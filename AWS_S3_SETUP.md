@@ -130,10 +130,10 @@ AWS_REGION=us-east-1
 
 ## 9. Test
 
-1. Admin panelinde ürün ekle
-2. "Fotoğraf Çek / Seç" butonuna tıkla
-3. Fotoğraf seç veya çek (doğrudan S3’e gider, Vercel 4.5MB limiti yok; max 10MB)
-4. Yükleme başarılı olursa URL otomatik doldurulur
+1. **Ürün görselleri:** Admin veya Dashboard ürün ekle
+2. **Logo / Profil fotoğrafı:** Dashboard → Ayarlar → "Fotoğraf Yükle (AWS S3)" → logos/ klasörüne yüklenir
+3. **Banner:** Dashboard → Ayarlar → "Banner Yükle (AWS S3)" → banners/ klasörüne yüklenir
+4. Dosyalar doğrudan S3'e gider (Vercel 4.5MB limiti yok; max 10MB)
 
 ## Maliyet Tahmini
 

@@ -84,6 +84,14 @@ async function setupDatabase() {
       ALTER TABLE stores ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2)
     `;
 
+    // Açılış/kapanış saatleri ve Google puanlama linki (gün gün)
+    await sql`
+      ALTER TABLE stores ADD COLUMN IF NOT EXISTS opening_hours JSONB
+    `;
+    await sql`
+      ALTER TABLE stores ADD COLUMN IF NOT EXISTS google_review_url TEXT
+    `;
+
     await sql`CREATE INDEX IF NOT EXISTS idx_stores_slug ON stores(slug)`;
 
     // Products table

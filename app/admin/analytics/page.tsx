@@ -50,7 +50,7 @@ export default function AdminAnalyticsPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/admin/saas-analytics?period=${period}`);
+      const response = await fetch(`/api/admin/saas-analytics?period=${period}`, { credentials: 'include' });
 
       if (!response.ok) {
         throw new Error('Analiz verileri yüklenemedi');

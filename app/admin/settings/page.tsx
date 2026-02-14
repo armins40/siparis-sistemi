@@ -25,7 +25,7 @@ export default function AdminSettingsPage() {
       setLoading(true);
       setError('');
       
-      const response = await fetch('/api/admin/settings');
+      const response = await fetch('/api/admin/settings', { credentials: 'include' });
       
       if (!response.ok) {
         throw new Error(`API responded with status ${response.status}`);
@@ -99,6 +99,7 @@ export default function AdminSettingsPage() {
       const promises = [
         fetch('/api/admin/settings', {
           method: 'PUT',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -109,6 +110,7 @@ export default function AdminSettingsPage() {
         }),
         fetch('/api/admin/settings', {
           method: 'PUT',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -119,6 +121,7 @@ export default function AdminSettingsPage() {
         }),
         fetch('/api/admin/settings', {
           method: 'PUT',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -129,6 +132,7 @@ export default function AdminSettingsPage() {
         }),
         fetch('/api/admin/settings', {
           method: 'PUT',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },

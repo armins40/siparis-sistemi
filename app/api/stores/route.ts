@@ -105,10 +105,14 @@ export async function PUT(request: NextRequest) {
       
       try {
         // 1. Yeni slug ile mağaza oluştur (veya güncelle)
+        const openingHoursJson = store.openingHours && Object.keys(store.openingHours).length > 0
+          ? JSON.stringify(store.openingHours)
+          : null;
         await sql`
           INSERT INTO stores (
             slug, name, description, logo, banner,
-            address, phone, whatsapp, theme_id, sector, delivery_fee
+            address, phone, whatsapp, theme_id, sector, delivery_fee,
+            opening_hours, google_review_url
           ) VALUES (
             ${store.slug},
             ${store.name},
@@ -120,7 +124,9 @@ export async function PUT(request: NextRequest) {
             ${store.whatsapp || null},
             ${store.themeId || 'modern-blue'},
             ${store.sector || null},
-            ${store.deliveryFee || null}
+            ${store.deliveryFee || null},
+            ${openingHoursJson}::jsonb,
+            ${store.googleReviewUrl?.trim() || null}
           )
           ON CONFLICT (slug) DO UPDATE SET
             name = EXCLUDED.name,
@@ -133,6 +139,8 @@ export async function PUT(request: NextRequest) {
             theme_id = EXCLUDED.theme_id,
             sector = EXCLUDED.sector,
             delivery_fee = EXCLUDED.delivery_fee,
+            opening_hours = EXCLUDED.opening_hours,
+            google_review_url = EXCLUDED.google_review_url,
             updated_at = NOW()
         `;
         

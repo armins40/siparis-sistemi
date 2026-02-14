@@ -23,6 +23,7 @@ export default function MenuPage({ params }: MenuPageProps) {
   const [selectedProducts, setSelectedProducts] = useState<Map<string, { quantity: number; unit?: string }>>(new Map());
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [address, setAddress] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'nakit' | 'kredi_karti' | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string>('');
@@ -349,6 +350,10 @@ export default function MenuPage({ params }: MenuPageProps) {
     }
     message += `\n\n💳 Toplam: ${total.toFixed(2)}₺`;
 
+    if (paymentMethod) {
+      message += `\n\n💵 Ödeme: ${paymentMethod === 'nakit' ? 'Nakit' : 'Kredi Kartı'}`;
+    }
+
     if (address.trim()) {
       message += `\n\n📍 Adres:\n${address.trim()}`;
     }
@@ -363,6 +368,7 @@ export default function MenuPage({ params }: MenuPageProps) {
 
     setShowOrderModal(false);
     setAddress('');
+    setPaymentMethod(null);
     setLocation(null);
     setLocationError('');
   };
@@ -579,6 +585,43 @@ export default function MenuPage({ params }: MenuPageProps) {
         )}
       </header>
 
+      {/* Açılış Saati + Google Puanlama */}
+      {((store?.openingHours && Object.keys(store.openingHours).length > 0) || store?.googleReviewUrl) && (
+        <div className="max-w-4xl mx-auto px-4 -mt-2 mb-3">
+          <div className="bg-white rounded-xl shadow-md p-3 flex flex-wrap items-center justify-between gap-3">
+            {store?.openingHours && Object.keys(store.openingHours).length > 0 && (() => {
+              const dayMap: Record<number, 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> = {
+                0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat',
+              };
+              const todayKey = dayMap[new Date().getDay()];
+              const todayHours = store.openingHours?.[todayKey];
+              return (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-500">🕐</span>
+                  <span className="font-medium text-gray-700">
+                    {todayHours && todayHours.open && todayHours.close
+                      ? `Bugün ${todayHours.open} - ${todayHours.close}`
+                      : 'Bugün kapalı'}
+                  </span>
+                </div>
+              );
+            })()}
+            {store?.googleReviewUrl && (
+              <a
+                href={store.googleReviewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-opacity hover:opacity-90"
+                style={{ backgroundColor: theme.primary, color: '#fff' }}
+              >
+                <span>⭐</span>
+                <span>Bizi Değerlendirin</span>
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Search Bar */}
       <div className="max-w-4xl mx-auto px-4 -mt-4 mb-4">
         <div className="bg-white rounded-xl shadow-lg p-4">
@@ -794,6 +837,7 @@ export default function MenuPage({ params }: MenuPageProps) {
                 onClick={() => {
                   setShowOrderModal(false);
                   setAddress('');
+                  setPaymentMethod(null);
                   setLocation(null);
                   setLocationError('');
                 }}
@@ -843,6 +887,39 @@ export default function MenuPage({ params }: MenuPageProps) {
               <div className="mt-3 pt-3 border-t border-gray-300 flex justify-between font-bold">
                 <span style={{ color: theme.text }}>💳 Toplam:</span>
                 <span style={{ color: theme.primary }}>{(getTotalPrice() || 0).toFixed(2)} ₺</span>
+              </div>
+            </div>
+
+            {/* Payment Method */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2" style={{ color: theme.text }}>
+                Ödeme Yöntemi
+              </label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('nakit')}
+                  className="flex-1 py-3 px-4 rounded-lg font-medium transition-all border-2"
+                  style={{
+                    backgroundColor: paymentMethod === 'nakit' ? theme.primary : theme.background,
+                    color: paymentMethod === 'nakit' ? '#ffffff' : theme.text,
+                    borderColor: paymentMethod === 'nakit' ? theme.primary : theme.text + '40',
+                  }}
+                >
+                  💵 Nakit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('kredi_karti')}
+                  className="flex-1 py-3 px-4 rounded-lg font-medium transition-all border-2"
+                  style={{
+                    backgroundColor: paymentMethod === 'kredi_karti' ? theme.primary : theme.background,
+                    color: paymentMethod === 'kredi_karti' ? '#ffffff' : theme.text,
+                    borderColor: paymentMethod === 'kredi_karti' ? theme.primary : theme.text + '40',
+                  }}
+                >
+                  💳 Kredi Kartı
+                </button>
               </div>
             </div>
 
@@ -940,10 +1017,10 @@ export default function MenuPage({ params }: MenuPageProps) {
             {/* Submit Button */}
             <button
               onClick={sendWhatsAppOrder}
-              disabled={!store?.whatsapp || store.whatsapp.trim() === ''}
+              disabled={!store?.whatsapp || store.whatsapp.trim() === '' || !paymentMethod}
               className="w-full py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               style={{
-                backgroundColor: store.whatsapp ? theme.primary : theme.text,
+                backgroundColor: store.whatsapp && paymentMethod ? theme.primary : theme.text,
                 color: '#ffffff',
               }}
             >

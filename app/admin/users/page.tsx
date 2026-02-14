@@ -46,7 +46,7 @@ export default function AdminUsersPage() {
       console.log('🔍 Loading users from API...');
       
       // Fetch users from database via API
-      const response = await fetch('/api/admin/users');
+      const response = await fetch('/api/admin/users', { credentials: 'include' });
       
       console.log('📡 API Response status:', response.status);
       
@@ -145,6 +145,7 @@ export default function AdminUsersPage() {
         
         const response = await fetch('/api/admin/users', {
           method: 'PUT',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -177,6 +178,7 @@ export default function AdminUsersPage() {
         // Database'e kaydet
         const response = await fetch('/api/admin/users', {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -217,7 +219,7 @@ export default function AdminUsersPage() {
     setError('');
     setEditLoading(true);
     try {
-      const res = await fetch(`/api/admin/users?userId=${encodeURIComponent(user.id)}`);
+      const res = await fetch(`/api/admin/users?userId=${encodeURIComponent(user.id)}`, { credentials: 'include' });
       const data = await res.json();
       if (data.success && data.user) {
         const u = data.user as User;
@@ -255,6 +257,7 @@ export default function AdminUsersPage() {
       // Delete from database (CASCADE will delete related data)
       const response = await fetch(`/api/admin/users?userId=${userId}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
       
       const result = await response.json();

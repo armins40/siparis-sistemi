@@ -81,7 +81,7 @@ export default function AdminCategoriesPage() {
 
   const loadCategories = async () => {
     try {
-      const res = await fetch('/api/admin/categories', { cache: 'no-store' });
+      const res = await fetch('/api/admin/categories', { cache: 'no-store', credentials: 'include' });
       const data = await res.json();
       if (data.success && Array.isArray(data.categories)) {
         setCategories(data.categories);
@@ -109,6 +109,7 @@ export default function AdminCategoriesPage() {
       if (editingCategory) {
         const res = await fetch('/api/admin/categories', {
           method: 'PUT',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: editingCategory.id, name: formData.name.trim() }),
         });
@@ -120,6 +121,7 @@ export default function AdminCategoriesPage() {
       } else {
         const res = await fetch('/api/admin/categories', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: formData.name.trim() }),
         });
@@ -147,7 +149,7 @@ export default function AdminCategoriesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Bu kategoriyi silmek istediğinize emin misiniz? Ürünleriniz etkilenmeyecektir.')) return;
     try {
-      const res = await fetch(`/api/admin/categories?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/categories?id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) await loadCategories();
       else alert(data.error || 'Silinemedi');
@@ -163,6 +165,7 @@ export default function AdminCategoriesPage() {
     try {
       const res = await fetch('/api/admin/categories', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bulkNames: BULK_CATEGORY_NAMES }),
       });

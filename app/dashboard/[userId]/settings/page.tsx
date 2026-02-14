@@ -2,7 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { getStore, saveStore, generateSlug, getThemeId } from '@/lib/store';
-// Database operations moved to API route - no direct DB imports needed
+import { compressImageForUpload } from '@/lib/image-compress';
+import type { DayKey, DayHours } from '@/lib/types';
+
+const DAY_LABELS: Record<DayKey, string> = {
+  mon: 'Pazartesi',
+  tue: 'Salı',
+  wed: 'Çarşamba',
+  thu: 'Perşembe',
+  fri: 'Cuma',
+  sat: 'Cumartesi',
+  sun: 'Pazar',
+};
+const DAY_KEYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+const defaultHours: DayHours = { open: '09:00', close: '21:00' };
 
 export default function SettingsPage() {
   const [formData, setFormData] = useState({
@@ -15,11 +29,15 @@ export default function SettingsPage() {
     phone: '',
     whatsapp: '',
     deliveryFee: '',
+    googleReviewUrl: '',
   });
+  const [openingHours, setOpeningHours] = useState<Partial<Record<DayKey, DayHours | null>>>({});
   const [logoError, setLogoError] = useState<string>('');
   const [bannerError, setBannerError] = useState<string>('');
   const [logoLoadError, setLogoLoadError] = useState(false);
   const [bannerLoadError, setBannerLoadError] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [originalSlug, setOriginalSlug] = useState<string>('');
 
   useEffect(() => {
@@ -36,7 +54,9 @@ export default function SettingsPage() {
         phone: store.phone || '',
         whatsapp: store.whatsapp || '',
         deliveryFee: (store as any).deliveryFee || '',
+        googleReviewUrl: (store as any).googleReviewUrl || '',
       });
+      setOpeningHours((store as any).openingHours || {});
       setOriginalSlug(slug); // Orijinal slug'ı sakla
     }
   }, []);
@@ -55,13 +75,37 @@ export default function SettingsPage() {
     setBannerLoadError(false);
   };
 
-  const removeLogo = () => {
+  const removeLogo = async () => {
+    const urlToDelete = formData.logo?.trim();
+    if (urlToDelete) {
+      try {
+        await fetch('/api/upload-s3/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: urlToDelete }),
+        });
+      } catch (e) {
+        console.warn('S3 delete logo failed:', e);
+      }
+    }
     setLogoError('');
     setLogoLoadError(false);
     setFormData(prev => ({ ...prev, logo: '' }));
   };
 
-  const removeBanner = () => {
+  const removeBanner = async () => {
+    const urlToDelete = formData.banner?.trim();
+    if (urlToDelete) {
+      try {
+        await fetch('/api/upload-s3/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: urlToDelete }),
+        });
+      } catch (e) {
+        console.warn('S3 delete banner failed:', e);
+      }
+    }
     setBannerError('');
     setBannerLoadError(false);
     setFormData(prev => ({ ...prev, banner: '' }));
@@ -101,6 +145,8 @@ export default function SettingsPage() {
       themeId: currentStore?.themeId || getThemeId(),
       sector: currentStore?.sector || undefined,
       deliveryFee: formData.deliveryFee ? parseFloat(formData.deliveryFee) : undefined,
+      openingHours: Object.keys(openingHours).length > 0 ? openingHours : undefined,
+      googleReviewUrl: formData.googleReviewUrl?.trim() || undefined,
     };
     
     // Save to localStorage (for backward compatibility)
@@ -218,17 +264,78 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label htmlFor="logo-url" className="block text-sm font-medium text-gray-700 mb-2">
-              Logo / Profil Fotoğrafı (URL)
+              Logo / Profil Fotoğrafı
             </label>
             <div className="space-y-3">
               <input
-                id="logo-url"
-                type="url"
-                value={formData.logo}
-                onChange={(e) => onLogoUrlChange(e.target.value)}
-                placeholder="https://example.com/logo.png"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                type="file"
+                id="logo-file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 10 * 1024 * 1024) {
+                    setLogoError('Dosya 10MB\'dan küçük olmalıdır.');
+                    return;
+                  }
+                  setUploadingLogo(true);
+                  setLogoError('');
+                  try {
+                    if (formData.logo?.trim()) {
+                      await fetch('/api/upload-s3/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: formData.logo.trim() }),
+                      }).catch(() => {});
+                    }
+                    const { blob, contentType } = await compressImageForUpload(file);
+                    const presignRes = await fetch('/api/upload-s3/presign', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ contentType, folder: 'logos' }),
+                    });
+                    const presign = await presignRes.json();
+                    if (!presign.success || !presign.uploadUrl || !presign.url) {
+                      setLogoError('Görsel yüklenirken hata: ' + (presign.error || 'Presigned URL alınamadı'));
+                      return;
+                    }
+                    const putRes = await fetch(presign.uploadUrl, {
+                      method: 'PUT',
+                      body: blob,
+                      headers: { 'Content-Type': contentType },
+                    });
+                    if (!putRes.ok) {
+                      setLogoError('Görsel yüklenirken hata oluştu.');
+                      return;
+                    }
+                    setFormData((prev) => ({ ...prev, logo: presign.url }));
+                    setLogoLoadError(false);
+                  } catch (error) {
+                    console.error('Logo upload error:', error);
+                    setLogoError('Görsel yüklenirken bir hata oluştu.');
+                  } finally {
+                    setUploadingLogo(false);
+                    e.target.value = '';
+                  }
+                }}
+                className="hidden"
               />
+              <div className="flex gap-2">
+                <label
+                  htmlFor="logo-file"
+                  className="flex-1 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-900 transition-colors text-center text-sm"
+                >
+                  {uploadingLogo ? '⏳ Yükleniyor...' : '📷 Fotoğraf Yükle'}
+                </label>
+                <input
+                  id="logo-url"
+                  type="url"
+                  value={formData.logo}
+                  onChange={(e) => onLogoUrlChange(e.target.value)}
+                  placeholder="veya URL yapıştır..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                />
+              </div>
               {logoError && <p className="text-sm text-red-600">{logoError}</p>}
               {formData.logo.trim() && (
                 <div>
@@ -259,24 +366,85 @@ export default function SettingsPage() {
                 </div>
               )}
               <p className="text-xs text-gray-500">
-                Görselin https:// ile başlayan adresini yapıştırın. Cloudinary kullanılmaz.
+                Fotoğraf yükleyin veya https:// ile başlayan URL yapıştırın.
               </p>
             </div>
           </div>
 
           <div>
             <label htmlFor="banner-url" className="block text-sm font-medium text-gray-700 mb-2">
-              Banner Görseli (URL)
+              Banner Görseli
             </label>
             <div className="space-y-3">
               <input
-                id="banner-url"
-                type="url"
-                value={formData.banner}
-                onChange={(e) => onBannerUrlChange(e.target.value)}
-                placeholder="https://example.com/banner.jpg"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                type="file"
+                id="banner-file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 10 * 1024 * 1024) {
+                    setBannerError('Dosya 10MB\'dan küçük olmalıdır.');
+                    return;
+                  }
+                  setUploadingBanner(true);
+                  setBannerError('');
+                  try {
+                    if (formData.banner?.trim()) {
+                      await fetch('/api/upload-s3/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: formData.banner.trim() }),
+                      }).catch(() => {});
+                    }
+                    const { blob, contentType } = await compressImageForUpload(file);
+                    const presignRes = await fetch('/api/upload-s3/presign', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ contentType, folder: 'banners' }),
+                    });
+                    const presign = await presignRes.json();
+                    if (!presign.success || !presign.uploadUrl || !presign.url) {
+                      setBannerError('Görsel yüklenirken hata: ' + (presign.error || 'Presigned URL alınamadı'));
+                      return;
+                    }
+                    const putRes = await fetch(presign.uploadUrl, {
+                      method: 'PUT',
+                      body: blob,
+                      headers: { 'Content-Type': contentType },
+                    });
+                    if (!putRes.ok) {
+                      setBannerError('Görsel yüklenirken hata oluştu.');
+                      return;
+                    }
+                    setFormData((prev) => ({ ...prev, banner: presign.url }));
+                    setBannerLoadError(false);
+                  } catch (error) {
+                    console.error('Banner upload error:', error);
+                    setBannerError('Görsel yüklenirken bir hata oluştu.');
+                  } finally {
+                    setUploadingBanner(false);
+                    e.target.value = '';
+                  }
+                }}
+                className="hidden"
               />
+              <div className="flex gap-2">
+                <label
+                  htmlFor="banner-file"
+                  className="flex-1 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-900 transition-colors text-center text-sm"
+                >
+                  {uploadingBanner ? '⏳ Yükleniyor...' : '📷 Banner Yükle'}
+                </label>
+                <input
+                  id="banner-url"
+                  type="url"
+                  value={formData.banner}
+                  onChange={(e) => onBannerUrlChange(e.target.value)}
+                  placeholder="veya URL yapıştır..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                />
+              </div>
               {bannerError && <p className="text-sm text-red-600">{bannerError}</p>}
               {formData.banner.trim() && (
                 <div className="relative">
@@ -307,7 +475,7 @@ export default function SettingsPage() {
                 </div>
               )}
               <p className="text-xs text-gray-500">
-                Görselin https:// ile başlayan adresini yapıştırın. Cloudinary kullanılmaz.
+                Banner yükleyin veya https:// ile başlayan URL yapıştırın.
               </p>
             </div>
           </div>
@@ -378,6 +546,82 @@ export default function SettingsPage() {
           />
           <p className="text-xs text-gray-500 mt-1">
             Siparişlerde gösterilecek kurye ücreti (opsiyonel)
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Açılış / Kapanış Saatleri (Gün Gün)
+          </label>
+          <div className="space-y-2 p-4 bg-gray-50 rounded-lg">
+            {DAY_KEYS.map((day) => {
+              const hours = openingHours[day];
+              const isClosed = hours === null;
+              return (
+                <div key={day} className="flex flex-wrap items-center gap-2">
+                  <span className="w-24 text-sm font-medium text-gray-700">{DAY_LABELS[day]}</span>
+                  <label className="flex items-center gap-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={isClosed}
+                      onChange={(e) => {
+                        setOpeningHours((prev) => ({
+                          ...prev,
+                          [day]: e.target.checked ? null : (prev[day] && typeof prev[day] === 'object' ? prev[day] : defaultHours),
+                        }));
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    Kapalı
+                  </label>
+                  {!isClosed && (
+                    <>
+                      <input
+                        type="time"
+                        value={hours?.open || defaultHours.open}
+                        onChange={(e) =>
+                          setOpeningHours((prev) => ({
+                            ...prev,
+                            [day]: { open: e.target.value, close: prev[day]?.close || defaultHours.close },
+                          }))
+                        }
+                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                      />
+                      <span className="text-gray-500">-</span>
+                      <input
+                        type="time"
+                        value={hours?.close || defaultHours.close}
+                        onChange={(e) =>
+                          setOpeningHours((prev) => ({
+                            ...prev,
+                            [day]: { open: prev[day]?.open || defaultHours.open, close: e.target.value },
+                          }))
+                        }
+                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="google-review-url" className="block text-sm font-medium text-gray-700 mb-2">
+            Google Puanlama Linki
+          </label>
+          <input
+            type="url"
+            id="google-review-url"
+            name="google-review-url"
+            value={formData.googleReviewUrl}
+            onChange={(e) => setFormData({ ...formData, googleReviewUrl: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            placeholder="https://g.page/r/xxx/review"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Google işletme sayfanızdan alacağınız puanlama linki. Menüde müşterilere gösterilir.
           </p>
         </div>
 

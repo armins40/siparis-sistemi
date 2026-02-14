@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS stores (
   theme_id TEXT DEFAULT 'modern-blue',
   sector TEXT,
   delivery_fee DECIMAL(10, 2),
+  opening_hours JSONB,
+  google_review_url TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

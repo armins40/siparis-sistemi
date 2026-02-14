@@ -31,12 +31,23 @@ export default function AdminLayout({
   useEffect(() => {
     setMounted(true);
     // Client-side authentication kontrolü
-    if (typeof window !== 'undefined') {
-      const auth = isAdminAuthenticated();
-      setAuthenticated(auth);
-      if (!auth && pathname !== '/admin/login') {
-        router.push('/admin/login');
-      }
+    if (typeof window === 'undefined') return;
+    const auth = isAdminAuthenticated();
+    setAuthenticated(auth);
+    if (!auth && pathname !== '/admin/login') {
+      router.push('/admin/login');
+      return;
+    }
+    // Sunucu oturumunu doğrula (cookie); 401 ise çıkış yap ve login'e yönlendir
+    if (auth && pathname !== '/admin/login') {
+      fetch('/api/admin/stats', { credentials: 'include' })
+        .then((res) => {
+          if (res.status === 401) {
+            adminLogout();
+            router.push('/admin/login');
+          }
+        })
+        .catch(() => {});
     }
   }, [router, pathname]);
 

@@ -37,7 +37,7 @@ export default function AdminAffiliatePage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/admin/affiliates');
+      const res = await fetch('/api/admin/affiliates', { credentials: 'include' });
       const data = await res.json();
       if (!data.success) {
         setError(data.error || 'Yüklenemedi');
@@ -140,7 +140,7 @@ export default function AdminAffiliatePage() {
                         type="button"
                         onClick={async () => {
                           if (!confirm(a.isSuspended ? 'Hesabı tekrar aktif etmek istediğinize emin misiniz?' : 'Bu affiliate hesabını askıya almak istediğinize emin misiniz?')) return;
-                          const res = await fetch('/api/admin/affiliates', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliateId: a.id, isSuspended: !a.isSuspended }) });
+                          const res = await fetch('/api/admin/affiliates', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliateId: a.id, isSuspended: !a.isSuspended }) });
                           const data = await res.json();
                           if (data.success) load();
                         }}
@@ -153,7 +153,7 @@ export default function AdminAffiliatePage() {
                           type="button"
                           onClick={async () => {
                             if (!confirm(`₺${a.pendingCommission.toFixed(2)} ödeme yapılacak. Onaylıyor musunuz?`)) return;
-                            const res = await fetch('/api/admin/affiliates/payout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliateId: a.id }) });
+                            const res = await fetch('/api/admin/affiliates/payout', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliateId: a.id }) });
                             const data = await res.json();
                             if (data.success) { alert(`Ödeme kaydedildi: ₺${data.amount?.toFixed(2)}`); load(); }
                             else alert(data.error || 'İşlem başarısız');

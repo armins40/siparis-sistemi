@@ -32,6 +32,13 @@ export interface Category {
   sector?: Sector; // Hangi sektör için (opsiyonel)
 }
 
+export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+export interface DayHours {
+  open: string;  // "09:00"
+  close: string; // "21:00"
+}
+
 export interface Store {
   slug: string;
   name: string;
@@ -44,6 +51,8 @@ export interface Store {
   themeId?: string;
   sector?: Sector; // Mağazanın sektörü
   deliveryFee?: number; // Kurye ücreti
+  openingHours?: Partial<Record<DayKey, DayHours | null>>; // Gün gün açılış kapanış
+  googleReviewUrl?: string; // Google puanlama linki
 }
 
 export interface Theme {
