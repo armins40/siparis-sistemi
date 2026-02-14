@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createStoreInDB, updateStoreInDB, getStoreFromDB } from '@/lib/db/stores';
+import { createStoreInDB, updateStoreInDB, getStoreFromDB, ensureStoreColumns } from '@/lib/db/stores';
 import { sql } from '@/lib/db/client';
 import type { Store } from '@/lib/types';
 
@@ -49,18 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dbSuccess = await createStoreInDB(store as Store);
-    
-    if (!dbSuccess) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Failed to save store to database'
-        },
-        { status: 500 }
-      );
-    }
-
+    await createStoreInDB(store as Store);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in /api/stores:', error);
@@ -104,6 +93,7 @@ export async function PUT(request: NextRequest) {
       const { sql } = await import('@/lib/db/client');
       
       try {
+        await ensureStoreColumns();
         // 1. Yeni slug ile mağaza oluştur (veya güncelle)
         const openingHoursJson = store.openingHours && Object.keys(store.openingHours).length > 0
           ? JSON.stringify(store.openingHours)
@@ -174,19 +164,7 @@ export async function PUT(request: NextRequest) {
       }
     } else {
       // Slug değişmediyse normal güncelleme
-      const dbSuccess = await updateStoreInDB(store as Store);
-      
-      if (!dbSuccess) {
-        console.error('❌ updateStoreInDB returned false');
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: 'Failed to update store in database',
-            details: 'Check server logs for more information'
-          },
-          { status: 500 }
-        );
-      }
+      await updateStoreInDB(store as Store);
     }
 
     console.log('✅ Store updated successfully via API route');

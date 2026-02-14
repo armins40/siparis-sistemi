@@ -2,8 +2,18 @@
 import { sql } from './client';
 import type { Store } from '@/lib/types';
 
+export async function ensureStoreColumns() {
+  try {
+    await sql`ALTER TABLE stores ADD COLUMN IF NOT EXISTS opening_hours JSONB`;
+    await sql`ALTER TABLE stores ADD COLUMN IF NOT EXISTS google_review_url TEXT`;
+  } catch (e) {
+    console.warn('ensureStoreColumns:', e);
+  }
+}
+
 export async function getStoreFromDB(slug: string): Promise<Store | null> {
   try {
+    await ensureStoreColumns();
     const result = await sql`
       SELECT 
         slug, name, description, logo, banner,
@@ -29,6 +39,7 @@ export async function getStoreFromDB(slug: string): Promise<Store | null> {
 
 export async function createStoreInDB(store: Store): Promise<boolean> {
   try {
+    await ensureStoreColumns();
     const openingHoursJson = store.openingHours && Object.keys(store.openingHours).length > 0
       ? JSON.stringify(store.openingHours)
       : null;
@@ -70,12 +81,13 @@ export async function createStoreInDB(store: Store): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('Error creating/updating store in DB:', error);
-    return false;
+    throw error;
   }
 }
 
 export async function updateStoreInDB(store: Store): Promise<boolean> {
   try {
+    await ensureStoreColumns();
     const openingHoursJson = store.openingHours && Object.keys(store.openingHours).length > 0
       ? JSON.stringify(store.openingHours)
       : null;
@@ -100,7 +112,7 @@ export async function updateStoreInDB(store: Store): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('Error updating store in DB:', error);
-    return false;
+    throw error;
   }
 }
 
