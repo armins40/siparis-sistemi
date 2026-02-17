@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { userLogin, userLoginAsync, getCurrentUser, checkUserSubscription } from '@/lib/auth';
 
 export default function LoginPage() {
@@ -107,35 +106,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#FAFAFA' }}>
-      {/* Header with Logo */}
-      <header className="w-full border-b bg-white sticky top-0 z-50 shadow-sm mb-8">
-        <div className="max-w-7xl mx-auto px-2 md:px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-start md:justify-center h-20">
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="hidden md:block"
-                style={{ width: '380px', height: 'auto' }}
-                priority
-              />
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="md:hidden"
-                style={{ width: '200px', height: 'auto' }}
-                priority
-              />
-            </Link>
-          </div>
-        </div>
-      </header>
-
+    <div className="flex flex-col items-center justify-center py-12">
       <div className="max-w-md w-full mx-4">
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="text-center mb-8">
@@ -173,9 +144,14 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2" style={{ color: '#555555' }}>
-                Şifre
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="password" className="block text-sm font-medium" style={{ color: '#555555' }}>
+                  Şifre
+                </label>
+                <Link href="/forgot-password" className="text-sm text-orange-600 hover:underline">
+                  Şifremi unuttum
+                </Link>
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}

@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSetting } from '@/lib/db/settings';
+import { MARKETING } from '@/lib/marketing';
 
 export async function GET(request: NextRequest) {
   try {
     // Public endpoint - no auth required
-    const [yearlyPrice, monthlyPlanPrice, kdvRate] = await Promise.all([
+    const [yearlyPrice, monthlyPlanPrice, kdvRate, priceTagline] = await Promise.all([
       getSetting('yearly_price'),
       getSetting('monthly_plan_price'),
       getSetting('kdv_rate'),
+      getSetting('price_tagline'),
     ]);
 
-    const defaultYearly = '2490';
-    const defaultMonthlyPlan = '599';
+    const defaultYearly = MARKETING.DEFAULT_YEARLY_PRICE;
+    const defaultMonthlyPlan = MARKETING.DEFAULT_MONTHLY_PRICE;
     const defaultKdv = '20';
     const price = yearlyPrice || defaultYearly;
     const monthlyPlan = monthlyPlanPrice || defaultMonthlyPlan;
@@ -29,16 +31,18 @@ export async function GET(request: NextRequest) {
       dailyPrice: dailyPrice.toString(),
       monthlyPlanPrice: monthlyPlan,
       kdvRate: kdv,
+      priceTagline: priceTagline || MARKETING.PRICE_TAGLINE,
     });
   } catch (error: any) {
     console.error('Error fetching price:', error);
     return NextResponse.json({
       success: true,
-      yearlyPrice: '2490',
+      yearlyPrice: MARKETING.DEFAULT_YEARLY_PRICE,
       monthlyPrice: '207',
       dailyPrice: '6.8',
-      monthlyPlanPrice: '599',
+      monthlyPlanPrice: MARKETING.DEFAULT_MONTHLY_PRICE,
       kdvRate: '20',
+      priceTagline: MARKETING.PRICE_TAGLINE,
     });
   }
 }

@@ -8,6 +8,7 @@ export default function AdminSettingsPage() {
   const [yearlyPrice, setYearlyPrice] = useState('');
   const [monthlyPrice, setMonthlyPrice] = useState('');
   const [kdvRate, setKdvRate] = useState('');
+  const [priceTagline, setPriceTagline] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -38,11 +39,13 @@ export default function AdminSettingsPage() {
         setYearlyPrice(result.settings.yearly_price || '2490');
         setMonthlyPrice(result.settings.monthly_plan_price || '599');
         setKdvRate(result.settings.kdv_rate ?? '20');
+        setPriceTagline(result.settings.price_tagline || 'Günlük bir çay parasına sipariş sistemi');
       } else {
         setWhatsappNumber('905535057059');
         setYearlyPrice('2490');
         setMonthlyPrice('599');
         setKdvRate('20');
+        setPriceTagline('Günlük bir çay parasına sipariş sistemi');
       }
     } catch (err: any) {
       console.error('Error loading settings:', err);
@@ -51,6 +54,7 @@ export default function AdminSettingsPage() {
       setYearlyPrice('2490');
       setMonthlyPrice('599');
       setKdvRate('20');
+      setPriceTagline('Günlük bir çay parasına sipariş sistemi');
     } finally {
       setLoading(false);
     }
@@ -139,6 +143,17 @@ export default function AdminSettingsPage() {
           body: JSON.stringify({
             key: 'kdv_rate',
             value: cleanedKdv,
+          }),
+        }),
+        fetch('/api/admin/settings', {
+          method: 'PUT',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            key: 'price_tagline',
+            value: (priceTagline || 'Günlük bir çay parasına sipariş sistemi').trim(),
           }),
         }),
       ];
@@ -250,6 +265,23 @@ export default function AdminSettingsPage() {
             />
             <p className="mt-1 text-sm text-gray-500">
               Ödeme sayfasında aylık planda gösterilecek fiyat (TL / ay). Sadece rakamlar. Örnek: 599
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="priceTagline" className="block text-sm font-medium text-gray-700 mb-2">
+              Fiyat Sloganı
+            </label>
+            <input
+              type="text"
+              id="priceTagline"
+              value={priceTagline}
+              onChange={(e) => setPriceTagline(e.target.value)}
+              placeholder="Günlük bir çay parasına sipariş sistemi"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+            <p className="mt-1 text-sm text-gray-500">
+              Ana sayfa fiyat bölümünde gösterilen slogan. Örn: Günlük bir çay parasına sipariş sistemi
             </p>
           </div>
 

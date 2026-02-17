@@ -3,6 +3,7 @@ import { completePaymentIntent, failPaymentIntent, getActiveSubscription } from 
 import { updateUser } from '@/lib/admin';
 import { getSetting } from '@/lib/db/settings';
 import { getUserByIdFromDB } from '@/lib/db/users';
+import { createSubscriptionInDB } from '@/lib/db/subscriptions';
 import { createAffiliateCommission } from '@/lib/affiliate';
 import { createAffiliateNotification } from '@/lib/affiliate-analytics';
 import type { User } from '@/lib/types';
@@ -57,6 +58,14 @@ export async function POST(request: NextRequest) {
         isActive: true,
         paymentMethodId: paymentMethod,
       } as Partial<User>);
+      // Admin paneli için DB'ye de kaydet (ses + fatura takibi)
+      await createSubscriptionInDB(
+        userId,
+        subscription.plan,
+        subscription.amount,
+        paymentIntentId,
+        paymentMethod
+      ).catch(() => {});
     }
 
     // Affiliate komisyonu: KDV sonrası tutar üzerinden (yıllık %20, aylık %10)

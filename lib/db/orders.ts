@@ -56,3 +56,47 @@ export async function getOrderCountByStoreSlug(storeSlug: string): Promise<numbe
     return 0;
   }
 }
+
+export interface OrderRow {
+  id: string;
+  user_id: string | null;
+  store_slug: string;
+  items: unknown;
+  total: string;
+  discount: string;
+  final_total: string;
+  address: string | null;
+  status: string;
+  created_at: string;
+  invoice_sent: boolean;
+}
+
+export async function getOrdersByStoreSlug(storeSlug: string): Promise<OrderRow[]> {
+  try {
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_sent BOOLEAN DEFAULT false`;
+    const result = await sql`
+      SELECT id, user_id, store_slug, items, total::text, discount::text, final_total::text, address, status, created_at, COALESCE(invoice_sent, false) as invoice_sent
+      FROM orders
+      WHERE store_slug = ${storeSlug}
+      ORDER BY created_at DESC
+    `;
+    return (result.rows || []) as OrderRow[];
+  } catch (e) {
+    console.error('Error getting orders by store:', e);
+    return [];
+  }
+}
+
+export async function updateOrderInvoiceSent(orderId: string, storeSlug: string, sent: boolean): Promise<boolean> {
+  try {
+    await sql`
+      UPDATE orders
+      SET invoice_sent = ${sent}
+      WHERE id = ${orderId} AND store_slug = ${storeSlug}
+    `;
+    return true;
+  } catch (e) {
+    console.error('Error updating order invoice_sent:', e);
+    return false;
+  }
+}

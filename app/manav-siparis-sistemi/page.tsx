@@ -1,7 +1,9 @@
 import Link from 'next/link';
-import Image from 'next/image';
+import { getSetting } from '@/lib/db/settings';
+import MarketingHeader from '@/components/MarketingHeader';
 
-export default function ManavSiparisPage() {
+export default async function ManavSiparisPage() {
+  const whatsappNumber = (await getSetting('whatsapp_number')) || '905535057059';
   // FAQ Schema (JSON-LD) for SEO - matches page content exactly
   const faqSchema = {
     "@context": "https://schema.org",
@@ -43,7 +45,7 @@ export default function ManavSiparisPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-slate-50">
       {/* FAQ Schema (JSON-LD) for SEO */}
       <script
         type="application/ld+json"
@@ -51,67 +53,22 @@ export default function ManavSiparisPage() {
           __html: JSON.stringify(faqSchema).replace(/</g, '\\u003c'),
         }}
       />
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="hidden md:block"
-                style={{ width: '200px', height: 'auto' }}
-                priority
-              />
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="md:hidden"
-                style={{ width: '150px', height: 'auto' }}
-                priority
-              />
+      <MarketingHeader
+        bannerTitle="Manav Sipariş Sistemi"
+        bannerSubtitle="Manav ve pazarcılar için pratik sipariş sistemi. QR veya linkle menü paylaşın, siparişler WhatsApp'tan gelsin."
+        whatsappNumber={whatsappNumber}
+        bannerChildren={
+          <div className="space-y-3">
+            <Link
+              href="/signup"
+              className="inline-block px-8 py-4 bg-[#25D366] hover:bg-[#20BA5A] text-white rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl"
+            >
+              Ücretsiz Dene
             </Link>
-            <nav className="flex items-center space-x-4">
-              <Link
-                href="/login"
-                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors text-sm font-medium"
-              >
-                Giriş Yap
-              </Link>
-              <Link
-                href="/signup"
-                className="px-6 py-2 bg-[#25D366] hover:bg-[#20BA5A] text-white rounded-lg font-semibold transition-all text-sm"
-              >
-                Ücretsiz Dene
-              </Link>
-            </nav>
+            <p className="text-sm text-slate-400">Kart bilgisi istemiyoruz • 7 gün tam sürüm</p>
           </div>
-        </div>
-      </header>
-
-      {/* Hero Section */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 text-center">
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-gray-900 leading-tight">
-          Manav Sipariş Sistemi
-        </h1>
-        <p className="text-xl md:text-2xl mb-8 text-gray-600">
-          WhatsApp ve telefonla gelen siparişler düzenli. Komisyonsuz, dakikalar içinde aktif.
-        </p>
-        
-        <div className="space-y-3 mb-12">
-          <Link
-            href="/signup"
-            className="inline-block px-8 py-4 bg-[#25D366] hover:bg-[#20BA5A] text-white rounded-lg font-bold text-lg transition-all shadow-lg hover:shadow-xl"
-          >
-            Ücretsiz Dene
-          </Link>
-          <p className="text-sm text-gray-500">Kart bilgisi istemiyoruz • 7 gün tam sürüm</p>
-        </div>
-      </section>
+        }
+      />
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">

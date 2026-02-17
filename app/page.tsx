@@ -7,7 +7,7 @@ export default async function LandingPage() {
   const yearlyPriceStr = await getSetting('yearly_price') || '2490';
   const yearlyPrice = parseFloat(yearlyPriceStr) || 2490;
   const monthlyPrice = Math.round(yearlyPrice / 12).toString();
-  const dailyPrice = (yearlyPrice / 365).toFixed(1);
+  const priceTagline = await getSetting('price_tagline') || 'Günlük bir çay parasına sipariş sistemi';
 
   // Structured Data (JSON-LD) for SEO - Server-side rendered
   const structuredData = {
@@ -47,7 +47,7 @@ export default async function LandingPage() {
         initialWhatsappNumber={whatsappNumber}
         yearlyPrice={yearlyPriceStr}
         monthlyPrice={monthlyPrice}
-        dailyPrice={dailyPrice}
+        priceTagline={priceTagline}
       />
     </>
   );

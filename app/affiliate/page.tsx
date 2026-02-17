@@ -1,34 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 
 export default function AffiliateLandingPage() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="Siparis" width={140} height={40} priority />
-            <span className="text-gray-500 text-sm">Affiliate</span>
-          </Link>
-          <nav className="flex gap-4">
-            <Link href="/affiliate/giris" className="text-gray-600 hover:text-gray-900 font-medium">
-              Giriş
-            </Link>
-            <Link
-              href="/affiliate/kayit"
-              className="bg-gray-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-800"
-            >
-              Programa Katıl
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-4xl mx-auto px-4 py-16">
+    <main className="flex-1 max-w-4xl mx-auto px-4 py-16">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          Sipariş Sistemi Affiliate Programı
+          Sipariş Sistemi Satış Ortaklığı Programı
         </h1>
         <p className="text-xl text-gray-600 mb-8">
           İşletmeler için sipariş sistemini tanıtın, her satıştan komisyon kazanın.
@@ -71,7 +49,6 @@ export default function AffiliateLandingPage() {
             Giriş yapın
           </Link>
         </p>
-      </main>
-    </div>
+    </main>
   );
 }

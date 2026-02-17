@@ -3,8 +3,30 @@ import { sql } from './client';
 import { deleteStoreFromDB } from './stores';
 import type { User } from '@/lib/types';
 
+async function ensureInvoiceColumns() {
+  try {
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invoice_tax_no TEXT`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invoice_address TEXT`;
+  } catch (e) {
+    console.warn('ensureInvoiceColumns:', e);
+  }
+}
+
+async function ensureAgreementColumns() {
+  try {
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS hizmet_sozlesmesi_onay BOOLEAN`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS kvkk_onay BOOLEAN`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS iade_onay BOOLEAN`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS onay_tarihi TIMESTAMP`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS ip_adresi TEXT`;
+  } catch (e) {
+    console.warn('ensureAgreementColumns:', e);
+  }
+}
+
 export async function getUserByIdFromDB(userId: string): Promise<User | null> {
   try {
+    await ensureInvoiceColumns();
     const result = await sql`
       SELECT 
         id, email, phone, name, password,
@@ -16,7 +38,9 @@ export async function getUserByIdFromDB(userId: string): Promise<User | null> {
         email_verified as "emailVerified",
         phone_verified as "phoneVerified",
         payment_method_id as "paymentMethodId",
-        referred_by_affiliate_id as "referredByAffiliateId"
+        referred_by_affiliate_id as "referredByAffiliateId",
+        invoice_tax_no as "invoiceTaxNo",
+        invoice_address as "invoiceAddress"
       FROM users
       WHERE id = ${userId}
       LIMIT 1
@@ -171,13 +195,28 @@ export async function createUserInDB(user: User): Promise<boolean> {
       hashedPassword = await hashPassword(hashedPassword);
     }
     
+    await ensureInvoiceColumns();
+    await ensureAgreementColumns();
+
+    const u = user as User & {
+      invoiceTaxNo?: string;
+      invoiceAddress?: string;
+      hizmetSozlesmesiOnay?: boolean;
+      kvkkOnay?: boolean;
+      iadeOnay?: boolean;
+      onayTarihi?: string;
+      ipAdresi?: string;
+    };
+
     await sql`
       INSERT INTO users (
         id, email, phone, name, password,
         plan, is_active, created_at, expires_at,
         store_slug, sector,
         email_verified, phone_verified, payment_method_id,
-        referred_by_affiliate_id
+        referred_by_affiliate_id,
+        invoice_tax_no, invoice_address,
+        hizmet_sozlesmesi_onay, kvkk_onay, iade_onay, onay_tarihi, ip_adresi
       ) VALUES (
         ${user.id},
         ${user.email || null},
@@ -193,7 +232,14 @@ export async function createUserInDB(user: User): Promise<boolean> {
         ${user.emailVerified || false},
         ${user.phoneVerified || false},
         ${user.paymentMethodId || null},
-        ${user.referredByAffiliateId || null}
+        ${user.referredByAffiliateId || null},
+        ${u.invoiceTaxNo || null},
+        ${u.invoiceAddress || null},
+        ${u.hizmetSozlesmesiOnay ?? null},
+        ${u.kvkkOnay ?? null},
+        ${u.iadeOnay ?? null},
+        ${u.onayTarihi || new Date().toISOString()},
+        ${u.ipAdresi || null}
       )
       ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
@@ -208,7 +254,14 @@ export async function createUserInDB(user: User): Promise<boolean> {
         email_verified = EXCLUDED.email_verified,
         phone_verified = EXCLUDED.phone_verified,
         payment_method_id = EXCLUDED.payment_method_id,
-        referred_by_affiliate_id = COALESCE(EXCLUDED.referred_by_affiliate_id, users.referred_by_affiliate_id)
+        referred_by_affiliate_id = COALESCE(EXCLUDED.referred_by_affiliate_id, users.referred_by_affiliate_id),
+        invoice_tax_no = COALESCE(EXCLUDED.invoice_tax_no, users.invoice_tax_no),
+        invoice_address = COALESCE(EXCLUDED.invoice_address, users.invoice_address),
+        hizmet_sozlesmesi_onay = COALESCE(EXCLUDED.hizmet_sozlesmesi_onay, users.hizmet_sozlesmesi_onay),
+        kvkk_onay = COALESCE(EXCLUDED.kvkk_onay, users.kvkk_onay),
+        iade_onay = COALESCE(EXCLUDED.iade_onay, users.iade_onay),
+        onay_tarihi = COALESCE(EXCLUDED.onay_tarihi, users.onay_tarihi),
+        ip_adresi = COALESCE(EXCLUDED.ip_adresi, users.ip_adresi)
     `;
     return true;
   } catch (error: any) {
@@ -312,6 +365,16 @@ export async function updateUserInDB(userId: string, updates: Partial<User>): Pr
       values.push(updates.referredByAffiliateId);
       paramIndex++;
     }
+    if (updates.invoiceTaxNo !== undefined) {
+      setParts.push(`invoice_tax_no = $${paramIndex}`);
+      values.push(updates.invoiceTaxNo);
+      paramIndex++;
+    }
+    if (updates.invoiceAddress !== undefined) {
+      setParts.push(`invoice_address = $${paramIndex}`);
+      values.push(updates.invoiceAddress);
+      paramIndex++;
+    }
     
     if (setParts.length === 0) {
       return true; // Nothing to update
@@ -344,7 +407,9 @@ export async function updateUserInDB(userId: string, updates: Partial<User>): Pr
         email_verified = ${updates.emailVerified ?? current.email_verified},
         phone_verified = ${updates.phoneVerified ?? current.phone_verified},
         payment_method_id = ${updates.paymentMethodId ?? current.payment_method_id},
-        referred_by_affiliate_id = ${updates.referredByAffiliateId !== undefined ? updates.referredByAffiliateId : current.referred_by_affiliate_id}
+        referred_by_affiliate_id = ${updates.referredByAffiliateId !== undefined ? updates.referredByAffiliateId : current.referred_by_affiliate_id},
+        invoice_tax_no = ${updates.invoiceTaxNo !== undefined ? updates.invoiceTaxNo : current.invoice_tax_no},
+        invoice_address = ${updates.invoiceAddress !== undefined ? updates.invoiceAddress : current.invoice_address}
       WHERE id = ${userId}
     `;
     

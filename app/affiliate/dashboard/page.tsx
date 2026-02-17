@@ -196,8 +196,8 @@ export default function AffiliateDashboardPage() {
       <header className="border-b border-gray-200 bg-white">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/affiliate" className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="Siparis" width={120} height={34} />
-            <span className="text-gray-500 text-sm">Affiliate</span>
+            <Image src="/logo.svg" alt="Siparis" width={280} height={80} className="w-[200px] md:w-[260px] h-auto" />
+            <span className="text-gray-500 text-sm">Satış Ortaklığı</span>
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-gray-600 text-sm">{affiliate.name}</span>

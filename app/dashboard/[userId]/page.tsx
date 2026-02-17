@@ -140,7 +140,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <Link
+          href={`/dashboard/${userId}/orders`}
+          className="bg-white rounded-xl shadow-lg p-6 block hover:shadow-xl transition-shadow"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Toplam Sipariş</p>
@@ -150,13 +153,20 @@ export default function DashboardPage() {
               <span className="text-2xl">🛒</span>
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Quick Actions */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Hızlı İşlemler</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link
+            href={`/dashboard/${userId}/orders`}
+            className="flex flex-col items-center justify-center p-6 border-2 border-gray-200 rounded-lg hover:border-gray-900 hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-4xl mb-2">🛒</span>
+            <span className="font-medium text-gray-900">Siparişler</span>
+          </Link>
           <Link
             href={`/dashboard/${userId}/products?openForm=1`}
             className="flex flex-col items-center justify-center p-6 border-2 border-gray-200 rounded-lg hover:border-gray-900 hover:bg-gray-50 transition-colors"

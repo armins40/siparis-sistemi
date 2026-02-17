@@ -83,6 +83,8 @@ export interface User {
   phoneVerified?: boolean; // Telefon doğrulandı mı
   paymentMethodId?: string; // Ödeme yöntemi ID (Stripe vb.)
   referredByAffiliateId?: string; // Affiliate referansı ile geldiyse (affiliates.id)
+  invoiceTaxNo?: string; // Fatura vergi numarası
+  invoiceAddress?: string; // Fatura adresi
 }
 
 export interface VerificationCode {

@@ -229,3 +229,5 @@ INSERT INTO settings (key, value) VALUES ('whatsapp_number', '905535057059')
 ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('yearly_price', '2490')
 ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('price_tagline', 'Günlük bir çay parasına sipariş sistemi')
+ON CONFLICT (key) DO NOTHING;

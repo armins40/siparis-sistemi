@@ -59,7 +59,7 @@ export default function AdminAffiliatePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Ortaklık (Affiliate)</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Satış Ortaklığı</h1>
         <p className="text-gray-600 mt-1">Programa katılanlar ve ödenecek komisyonlar. Ödemeler 5 günde bir yapılır (son satıştan itibaren); minimum çekim ₺1.000.</p>
       </div>
 
@@ -75,7 +75,7 @@ export default function AdminAffiliatePage() {
             <p className="text-2xl font-bold text-green-900 mt-1">₺{summary.totalPaid.toFixed(2)}</p>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <p className="text-gray-600 text-sm font-medium">Kayıtlı affiliate</p>
+            <p className="text-gray-600 text-sm font-medium">Kayıtlı satış ortağı</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{summary.affiliateCount}</p>
           </div>
         </div>
@@ -91,11 +91,11 @@ export default function AdminAffiliatePage() {
       )}
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <h2 className="px-6 py-4 border-b border-gray-200 font-semibold text-gray-900">Affiliate listesi</h2>
+        <h2 className="px-6 py-4 border-b border-gray-200 font-semibold text-gray-900">Satış ortakları listesi</h2>
         {loading ? (
           <div className="p-12 text-center text-gray-500">Yükleniyor...</div>
         ) : affiliates.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">Henüz kayıtlı affiliate yok.</div>
+          <div className="p-12 text-center text-gray-500">Henüz kayıtlı satış ortağı yok.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -139,7 +139,7 @@ export default function AdminAffiliatePage() {
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!confirm(a.isSuspended ? 'Hesabı tekrar aktif etmek istediğinize emin misiniz?' : 'Bu affiliate hesabını askıya almak istediğinize emin misiniz?')) return;
+                          if (!confirm(a.isSuspended ? 'Hesabı tekrar aktif etmek istediğinize emin misiniz?' : 'Bu satış ortağı hesabını askıya almak istediğinize emin misiniz?')) return;
                           const res = await fetch('/api/admin/affiliates', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliateId: a.id, isSuspended: !a.isSuspended }) });
                           const data = await res.json();
                           if (data.success) load();
@@ -174,7 +174,7 @@ export default function AdminAffiliatePage() {
 
       <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
         <p className="font-medium text-gray-700">Ödeme nasıl yapılır?</p>
-        <p className="mt-1">Ödemeler <strong>5 günde bir</strong> yapılır; geri sayım ilgili affiliate’in <strong>son satışından</strong> sonra başlar. <strong>Minimum çekim ₺1.000</strong>’dir. Tabloda her affiliate’in <strong>Ad soyad (ödeme)</strong>, <strong>IBAN</strong> ve <strong>Sonraki ödeme</strong> (kalan gün) bilgisi görünür. Bekleyen tutarı bu IBAN’a havale/EFT yapabilirsiniz.</p>
+        <p className="mt-1">Ödemeler <strong>5 günde bir</strong> yapılır; geri sayım ilgili satış ortağının <strong>son satışından</strong> sonra başlar. <strong>Minimum çekim ₺1.000</strong>’dir. Tabloda her satış ortağının <strong>Ad soyad (ödeme)</strong>, <strong>IBAN</strong> ve <strong>Sonraki ödeme</strong> (kalan gün) bilgisi görünür. Bekleyen tutarı bu IBAN’a havale/EFT yapabilirsiniz.</p>
       </div>
     </div>
   );

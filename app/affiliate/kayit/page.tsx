@@ -74,14 +74,14 @@ export default function AffiliateKayitPage() {
       <header className="border-b border-gray-200 bg-white">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <Link href="/affiliate" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900">
-            <Image src="/logo.svg" alt="Siparis" width={120} height={34} />
-            <span className="text-sm">Affiliate</span>
+            <Image src="/logo.svg" alt="Siparis" width={280} height={80} className="w-[200px] md:w-[260px] h-auto" />
+            <span className="text-sm">Satış Ortaklığı</span>
           </Link>
         </div>
       </header>
 
       <main className="flex-1 max-w-md mx-auto px-4 py-12 w-full">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Affiliate kayıt</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Satış ortağı kayıt</h1>
         <p className="text-gray-600 text-sm mb-6">
           Programı tanıtacak kişiler (YouTuber, içerik üreticisi vb.) buradan kayıt olur. Müşteri kaydı değildir.
         </p>

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -49,51 +48,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#FAFAFA' }}>
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-2 md:px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <Link href="/" className="flex items-center md:justify-start">
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="hidden md:block"
-                style={{ width: '380px', height: 'auto' }}
-                priority
-              />
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="md:hidden"
-                style={{ width: '200px', height: 'auto' }}
-                priority
-              />
-            </Link>
-            <nav className="flex items-center space-x-4">
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 font-medium transition-colors"
-                style={{ color: '#555555' }}
-              >
-                Giriş Yap
-              </Link>
-              <Link
-                href="/#fiyatlandirma"
-                className="px-6 py-2 rounded-lg font-semibold transition-opacity hover:opacity-90"
-                style={{ backgroundColor: '#FB6602', color: '#FFFFFF' }}
-              >
-                Fiyatlandırma
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
-
+    <>
       {/* Contact Form Section */}
       <section className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="bg-white rounded-xl shadow-lg p-8">
@@ -117,10 +72,10 @@ export default function ContactPage() {
               <p className="text-red-800 text-center">
                 ❌ Bir hata oluştu. Lütfen tekrar deneyin veya doğrudan{' '}
                 <a
-                  href="mailto:admin@siparis-sistemi.com"
+                  href="mailto:destek@siparis-sistemi.com"
                   className="underline font-semibold"
                 >
-                  admin@siparis-sistemi.com
+                  destek@siparis-sistemi.com
                 </a>
                 {' '}adresine mail gönderin.
               </p>
@@ -207,11 +162,11 @@ export default function ContactPage() {
               Doğrudan e-posta göndermek için:
             </p>
             <a
-              href="mailto:admin@siparis-sistemi.com"
+              href="mailto:destek@siparis-sistemi.com"
               className="text-sm font-medium hover:underline"
               style={{ color: '#FB6602' }}
             >
-              admin@siparis-sistemi.com
+              destek@siparis-sistemi.com
             </a>
           </div>
         </div>
@@ -225,6 +180,6 @@ export default function ContactPage() {
           </div>
         </div>
       </footer>
-    </div>
+    </>
   );
 }

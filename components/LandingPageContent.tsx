@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import MarketingHeader from './MarketingHeader';
+import { MARKETING } from '@/lib/marketing';
 
 const WHATSAPP_URL = (num: string) => `https://wa.me/${num.replace(/\D/g, '')}`;
 
@@ -8,74 +10,45 @@ interface Props {
   initialWhatsappNumber: string;
   yearlyPrice?: string;
   monthlyPrice?: string;
-  dailyPrice?: string;
+  priceTagline?: string;
 }
 
 export default function LandingPageContent({
   initialWhatsappNumber,
   yearlyPrice = '2490',
   monthlyPrice = '208',
-  dailyPrice = '6.8',
+  priceTagline = 'Günlük bir çay parasına sipariş sistemi',
 }: Props) {
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm shadow-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link href="/" className="text-xl font-bold text-slate-800 hover:text-slate-900">
-            Sipariş Sistemi
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link
-              href="/whatsapp-siparis-sistemi"
-              className="text-sm font-medium text-slate-600 hover:text-slate-900"
-            >
-              Nasıl Çalışır?
-            </Link>
-            <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-              Giriş
-            </Link>
-            <Link
-              href="/signup"
-              className="rounded-xl bg-[#25D366] px-5 py-2.5 font-semibold text-white shadow-md hover:bg-[#1da851] transition-colors"
-            >
-              Ücretsiz Dene
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-40" />
-        <div className="relative mx-auto max-w-6xl px-4 py-20 sm:py-28 text-center">
-          <h1 className="mb-6 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-            WhatsApp ile Sipariş Alın
-          </h1>
-          <p className="mx-auto mb-10 max-w-2xl text-lg text-slate-300 sm:text-xl">
-            Tekel, manav, market, kasap ve şarküteri için pratik sipariş sistemi. QR veya linkle menü paylaşın; müşteri seçer, ödeme yöntemini belirler, sipariş WhatsApp&apos;tan gelir.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#25D366] px-8 py-4 font-semibold text-white shadow-lg hover:bg-[#1da851] transition-all hover:scale-105"
-            >
-              <span>7 Gün Ücretsiz Başla</span>
-            </Link>
-            <a
-              href={WHATSAPP_URL(initialWhatsappNumber)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border-2 border-white/50 px-8 py-4 font-semibold text-white hover:bg-white/10 transition-colors"
-            >
-              WhatsApp&apos;tan Sor
-            </a>
-          </div>
-          <p className="mt-6 text-sm text-slate-400">
-            Kart bilgisi istemiyoruz • Dakikalar içinde aktif
-          </p>
-        </div>
-      </section>
+      <MarketingHeader
+        bannerTitle="WhatsApp ile Sipariş Alın"
+        bannerSubtitle="Tekel, manav, market, kasap ve şarküteri için pratik sipariş sistemi. QR veya linkle menü paylaşın; müşteri seçer, ödeme yöntemini belirler, sipariş WhatsApp'tan gelir."
+        whatsappNumber={initialWhatsappNumber}
+        bannerChildren={
+          <>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <Link
+                href="/signup"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#25D366] px-8 py-4 font-semibold text-white shadow-lg hover:bg-[#1da851] transition-all hover:scale-105"
+              >
+                <span>7 Gün Ücretsiz Başla</span>
+              </Link>
+              <a
+                href={WHATSAPP_URL(initialWhatsappNumber)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border-2 border-white/50 px-8 py-4 font-semibold text-white hover:bg-white/10 transition-colors"
+              >
+                WhatsApp&apos;tan Sor
+              </a>
+            </div>
+            <p className="mt-6 text-sm text-slate-400">
+              Kart bilgisi istemiyoruz • Dakikalar içinde aktif
+            </p>
+          </>
+        }
+      />
 
       {/* Özellikler */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
@@ -117,11 +90,12 @@ export default function LandingPageContent({
       {/* Fiyat */}
       <section className="bg-white border-y border-slate-200 py-16">
         <div className="mx-auto max-w-6xl px-4 text-center">
+          <p className="mb-2 text-slate-500 text-sm font-medium">{priceTagline}</p>
           <h2 className="mb-4 text-3xl font-bold text-slate-900">
-            Komisyonsuz, Şeffaf Fiyat
+            {MARKETING.PRICE_HEADING}
           </h2>
           <p className="mb-8 text-slate-600">
-            Aylık {monthlyPrice}₺ • Günlük {dailyPrice}₺ • Yıllık {yearlyPrice}₺
+            Aylık {monthlyPrice}₺ • Yıllık {yearlyPrice}₺+KDV
           </p>
           <Link
             href="/signup"
@@ -156,6 +130,18 @@ export default function LandingPageContent({
           <Link href="/hizmet-sozlesmesi" className="hover:text-slate-900">
             Hizmet Sözleşmesi
           </Link>
+          <Link href="/kullanim-sartlari" className="hover:text-slate-900">
+            Kullanım Şartları
+          </Link>
+          <Link href="/affiliate-sozlesmesi" className="hover:text-slate-900">
+            Affiliate
+          </Link>
+          <Link href="/sss" className="hover:text-slate-900">
+            SSS
+          </Link>
+          <Link href="/gizlilik-politikasi" className="hover:text-slate-900">
+            Gizlilik
+          </Link>
           <Link href="/kvkk" className="hover:text-slate-900">
             KVKK
           </Link>
@@ -164,6 +150,9 @@ export default function LandingPageContent({
           </Link>
           <Link href="/iade-iptal" className="hover:text-slate-900">
             İade & İptal
+          </Link>
+          <Link href="/cerez-politikasi" className="hover:text-slate-900">
+            Çerez Politikası
           </Link>
         </div>
       </footer>

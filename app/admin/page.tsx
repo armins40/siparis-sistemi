@@ -125,16 +125,31 @@ export default function AdminDashboardPage() {
           </div>
         </Link>
 
+        <Link href="/admin/sales">
+          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Satışlar</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalRevenue.toFixed(2)} ₺</p>
+                <p className="text-xs text-gray-500 mt-1">Fatura takibi</p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <span className="text-2xl">💰</span>
+              </div>
+            </div>
+          </div>
+        </Link>
+
         <Link href="/admin/analytics">
           <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Toplam Gelir</p>
+                <p className="text-sm font-medium text-gray-600">Analizler</p>
                 <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalRevenue.toFixed(2)} ₺</p>
                 <p className="text-xs text-gray-500 mt-1">{stats.totalOrders} sipariş</p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <span className="text-2xl">💰</span>
+              <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <span className="text-2xl">📈</span>
               </div>
             </div>
           </div>

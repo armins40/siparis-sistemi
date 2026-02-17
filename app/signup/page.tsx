@@ -8,7 +8,6 @@ import { setCurrentUser, logout } from '@/lib/auth';
 import { generateSlug, saveStore, clearStore } from '@/lib/store';
 import type { User, Sector, Store } from '@/lib/types';
 import { SECTORS } from '@/lib/sectors';
-
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -25,6 +24,8 @@ function SignupForm() {
     password: '',
     sector: '' as Sector | '',
     verificationType: 'email' as 'email' | 'phone',
+    invoiceTaxNo: '',
+    invoiceAddress: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
@@ -142,6 +143,8 @@ function SignupForm() {
         expiresAt, // 7 gün sonra
         storeSlug: storeSlug,
         createdAt: new Date().toISOString(),
+        invoiceTaxNo: formData.invoiceTaxNo.trim() || undefined,
+        invoiceAddress: formData.invoiceAddress.trim() || undefined,
       };
 
       // Store oluştur — slug firma isminden, mağaza adı firma ismi
@@ -453,43 +456,7 @@ function SignupForm() {
   // Plan kontrolü kaldırıldı - herkes trial olarak kayıt oluyor
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#FAFAFA' }}>
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-2 md:px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <Link href="/" className="flex items-center md:justify-start">
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="hidden md:block"
-                style={{ width: '380px', height: 'auto' }}
-                priority
-              />
-              <Image
-                src="/logo.svg"
-                alt="Siparis Sistemi"
-                width={531}
-                height={354}
-                className="md:hidden"
-                style={{ width: '200px', height: 'auto' }}
-                priority
-              />
-            </Link>
-            <Link
-              href="/"
-              className="px-4 py-2 font-medium transition-colors"
-              style={{ color: '#555555' }}
-            >
-              Ana Sayfa
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Step Indicator */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -716,6 +683,50 @@ function SignupForm() {
                   </p>
                 </div>
 
+                {/* Fatura Bilgileri - isteğe bağlı */}
+                <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/50">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Fatura Bilgileri (isteğe bağlı)</h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    7 gün ücretsiz deneme sırasında isteğe bağlı ödeme yapabilirsiniz. Fatura isim üzerine de kesilebilir; vergi no ve adres isteğe bağlıdır.
+                  </p>
+                  <div className="space-y-3 text-sm">
+                    <p className="flex items-center gap-2 text-gray-600">
+                      <span className="text-green-600">✔</span> Ad soyad: <strong>{formData.name || '—'}</strong>
+                    </p>
+                    <p className="flex items-center gap-2 text-gray-600">
+                      <span className="text-green-600">✔</span> Firma adı: <strong>{formData.companyName || '—'}</strong>
+                    </p>
+                    <div>
+                      <label htmlFor="signup-invoice-tax" className="block text-xs font-medium text-gray-600 mb-1">Vergi no</label>
+                      <input
+                        type="text"
+                        id="signup-invoice-tax"
+                        value={formData.invoiceTaxNo}
+                        onChange={(e) => setFormData({ ...formData, invoiceTaxNo: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                        placeholder="10 veya 11 haneli"
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        style={{ borderColor: '#AF948F' }}
+                        maxLength={11}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="signup-invoice-address" className="block text-xs font-medium text-gray-600 mb-1">Adres</label>
+                      <input
+                        type="text"
+                        id="signup-invoice-address"
+                        value={formData.invoiceAddress}
+                        onChange={(e) => setFormData({ ...formData, invoiceAddress: e.target.value })}
+                        placeholder="Fatura adresi"
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        style={{ borderColor: '#AF948F' }}
+                      />
+                    </div>
+                    <p className="flex items-center gap-2 text-gray-600">
+                      <span className="text-green-600">✔</span> Mail: <strong>{formData.email || '—'}</strong>
+                    </p>
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -745,7 +756,6 @@ function SignupForm() {
 
           {/* Ödeme adımı kaldırıldı - 7 gün sonra dashboard'da ödeme ekranı gösterilecek */}
         </div>
-      </div>
     </div>
   );
 }

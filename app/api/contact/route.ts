@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const fromEmail = process.env.RESEND_FROM_EMAIL || 'Sipariş Sistemi <onboarding@resend.dev>';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,52 +17,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In production, you would send an email using a service like:
-    // - Resend (resend.com)
-    // - SendGrid (sendgrid.com)
-    // - Nodemailer with SMTP
-    // - AWS SES
-    // 
-    // For now, we'll create the email content and log it
-    // You can integrate with your preferred email service
-    
-    const emailContent = {
-      to: 'admin@siparis-sistemi.com',
-      from: email,
-      subject: `İletişim Formu: ${subject}`,
-      html: `
-        <h2>Yeni İletişim Formu Mesajı</h2>
-        <p><strong>Ad Soyad:</strong> ${name}</p>
-        <p><strong>E-posta:</strong> ${email}</p>
-        <p><strong>Konu:</strong> ${subject}</p>
+    const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const escBr = (s: string) => esc(s).replace(/\n/g, '<br>');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #555555;">Yeni İletişim Formu Mesajı</h2>
+        <p><strong>Ad Soyad:</strong> ${esc(name)}</p>
+        <p><strong>E-posta:</strong> ${esc(email)}</p>
+        <p><strong>Konu:</strong> ${esc(subject)}</p>
         <p><strong>Mesaj:</strong></p>
-        <p>${message.replace(/\n/g, '<br>')}</p>
-      `,
-      text: `
-        Yeni İletişim Formu Mesajı
-        Ad Soyad: ${name}
-        E-posta: ${email}
-        Konu: ${subject}
-        Mesaj: ${message}
-      `,
-    };
+        <p style="white-space: pre-wrap;">${escBr(message)}</p>
+      </div>
+    `;
 
-    // TODO: Replace this with actual email service integration
-    // Example with Resend (install: npm install resend):
-    /*
-    import { Resend } from 'resend';
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    if (!resend || !process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY bulunamadı - İletişim formu mail gönderilemedi');
+      return NextResponse.json(
+        { error: 'E-posta servisi yapılandırılmamış. Lütfen daha sonra tekrar deneyin veya destek@siparis-sistemi.com adresine doğrudan yazın.' },
+        { status: 500 }
+      );
+    }
+
     await resend.emails.send({
-      from: 'onboarding@resend.dev',
-      to: 'admin@siparis-sistemi.com',
-      replyTo: email,
-      subject: emailContent.subject,
-      html: emailContent.html,
+      from: fromEmail,
+      to: 'destek@siparis-sistemi.com',
+      replyTo: email.trim(),
+      subject: `İletişim Formu: ${subject}`,
+      html,
     });
-    */
 
-
-    // Return success response
     return NextResponse.json(
       { message: 'Mesajınız başarıyla gönderildi' },
       { status: 200 }

@@ -30,6 +30,15 @@ export default function PWAInstallPrompt() {
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
+    // Eklenen sayfa PWA açıldığında açık kalsın
+    const url = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/';
+    if (url && url !== '/') {
+      try {
+        localStorage.setItem('pwa-launch-url', url);
+      } catch {
+        // ignore
+      }
+    }
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') setShowBanner(false);

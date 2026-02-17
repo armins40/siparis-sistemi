@@ -68,6 +68,13 @@ async function handleSignup(request: NextRequest) {
       );
     }
 
+    // IP adresi (x-forwarded-for, x-real-ip, request.socket)
+    const forwarded = request.headers.get('x-forwarded-for');
+    const realIp = request.headers.get('x-real-ip');
+    const ipAdresi = (forwarded?.split(',')[0]?.trim()) || realIp || (request as any).socket?.remoteAddress || null;
+    user.onayTarihi = new Date().toISOString();
+    user.ipAdresi = ipAdresi;
+
     // Sanitize inputs
     if (user.name) {
       user.name = sanitizeString(user.name, 200);

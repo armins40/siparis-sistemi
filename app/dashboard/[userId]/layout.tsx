@@ -8,6 +8,7 @@ import { getCurrentUser, getCurrentUserAsync, logout, checkUserSubscription } fr
 import { getStore, saveStore, clearStore } from '@/lib/store';
 import type { User } from '@/lib/types';
 import DashboardPWAProvider from '@/components/DashboardPWAProvider';
+import DashboardOrderNotifier from '@/components/DashboardOrderNotifier';
 
 export default function DashboardLayout({
   children,
@@ -22,6 +23,7 @@ export default function DashboardLayout({
   // Menu items with userId in URL
   const menuItems = [
     { href: `/dashboard/${userId}`, label: 'Genel Bakış', icon: '📊' },
+    { href: `/dashboard/${userId}/orders`, label: 'Siparişler', icon: '🛒' },
     { href: `/dashboard/${userId}/products`, label: 'Ürünler', icon: '📦' },
     { href: `/dashboard/${userId}/products?openForm=1`, label: 'Yeni Ürün Ekle', icon: '➕' },
     { href: `/dashboard/${userId}/categories`, label: 'Kategoriler', icon: '📁' },
@@ -179,7 +181,7 @@ export default function DashboardLayout({
             width={531}
             height={354}
             className="hidden md:block"
-            style={{ width: '380px', height: 'auto' }}
+            style={{ width: '280px', height: 'auto' }}
             priority
           />
           <Image
@@ -188,7 +190,7 @@ export default function DashboardLayout({
             width={531}
             height={354}
             className="md:hidden"
-            style={{ width: '200px', height: 'auto' }}
+            style={{ width: '220px', height: 'auto' }}
             priority
           />
         </Link>
@@ -217,7 +219,7 @@ export default function DashboardLayout({
               alt="Siparis Sistemi"
               width={531}
               height={354}
-              style={{ width: '380px', height: 'auto' }}
+              style={{ width: '260px', height: 'auto' }}
               priority
             />
           </Link>
@@ -231,7 +233,7 @@ export default function DashboardLayout({
               alt="Siparis Sistemi"
               width={531}
               height={354}
-              style={{ width: '200px', height: 'auto' }}
+              style={{ width: '220px', height: 'auto' }}
               priority
             />
           </Link>
@@ -286,6 +288,14 @@ export default function DashboardLayout({
                   {user.plan === 'free' && `${subscriptionStatus.daysRemaining} gün erişim kaldı`}
                   {user.plan !== 'trial' && user.plan !== 'free' && `${subscriptionStatus.daysRemaining} gün kaldı`}
                 </div>
+              )}
+              {user.plan === 'trial' && subscriptionStatus.hasActiveSubscription && (
+                <Link
+                  href={`/dashboard/${user.id}/payment`}
+                  className="text-xs text-orange-600 hover:text-orange-700 underline mt-1 block"
+                >
+                  Ödeme yap
+                </Link>
               )}
               {!subscriptionStatus.hasActiveSubscription && (
                 <Link
@@ -359,6 +369,9 @@ export default function DashboardLayout({
       <main className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
         <div className="p-4 lg:p-8">{children}</div>
       </main>
+
+      {/* Sipariş bildirimi - tüm dashboard sayfalarında çalışır */}
+      {userId && <DashboardOrderNotifier userId={userId} />}
     </div>
     </DashboardPWAProvider>
   );

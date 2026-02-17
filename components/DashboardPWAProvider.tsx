@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { getFCMToken, onForegroundMessage, isFirebaseConfigured, requestNotificationPermission } from '@/lib/firebase';
+import { playChaChing } from '@/lib/sounds';
 
 export default function DashboardPWAProvider({
   userId,
@@ -41,11 +42,7 @@ export default function DashboardPWAProvider({
       const title = p?.notification?.title ?? 'Yeni bildirim';
       const body = p?.notification?.body ?? '';
       try {
-        if (typeof Audio !== 'undefined') {
-          const audio = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUtvT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==');
-          audio.volume = 0.3;
-          audio.play().catch(() => {});
-        }
+        playChaChing();
       } catch {
         // ignore
       }

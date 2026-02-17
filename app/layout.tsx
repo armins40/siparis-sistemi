@@ -1,8 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SITE_URL } from "@/lib/site-url";
+import { getSetting } from "@/lib/db/settings";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import PWAOfflineBanner from "@/components/PWAOfflineBanner";
+import PWALaunchRedirect from "@/components/PWALaunchRedirect";
+import WhatsAppFloat from "@/components/WhatsAppFloat";
 
 // Using system fonts instead of Google Fonts to avoid build-time network dependency
 const fontVariable = "font-sans";
@@ -70,11 +73,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/logo.png', type: 'image/png' },
+      { url: '/favicon.ico', type: 'image/x-icon' },
       { url: '/logo.svg', type: 'image/svg+xml' },
     ],
-    shortcut: '/logo.png',
-    apple: '/icon-192.png',
+    shortcut: '/favicon.ico',
+    apple: '/favicon.ico',
   },
 };
 
@@ -85,17 +88,20 @@ export const viewport: Viewport = {
   themeColor: '#25D366',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const whatsappNumber = (await getSetting('whatsapp_number')) || '905535057059';
   return (
     <html lang="tr">
       <body className={`${fontVariable} antialiased`} style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
         <PWAOfflineBanner />
+        <PWALaunchRedirect />
         {children}
         <PWAInstallPrompt />
+        <WhatsAppFloat whatsappNumber={whatsappNumber} />
       </body>
     </html>
   );

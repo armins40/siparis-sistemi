@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCurrentUser, setCurrentUser } from '@/lib/auth';
+import { getCurrentUserAsync, setCurrentUser } from '@/lib/auth';
 import { updateUser } from '@/lib/admin';
 import type { User } from '@/lib/types';
+import AgreementCheckboxes from '@/components/AgreementCheckboxes';
+import PaymentTrustBadges from '@/components/PaymentTrustBadges';
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -20,31 +22,37 @@ export default function PaymentPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [agreedHizmet, setAgreedHizmet] = useState(false);
+  const [agreedKvkk, setAgreedKvkk] = useState(false);
+  const [agreedIade, setAgreedIade] = useState(false);
+  const [agreementError, setAgreementError] = useState('');
+  const [invoiceTaxNo, setInvoiceTaxNo] = useState('');
+  const [invoiceAddress, setInvoiceAddress] = useState('');
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      router.push('/login');
-      return;
-    }
-    
-    // Trial kullanıcı değilse dashboard'a yönlendir
-    if (currentUser.plan !== 'trial') {
-      router.push('/dashboard');
-      return;
-    }
-    
-    // Süresi dolmamışsa dashboard'a yönlendir
-    if (currentUser.expiresAt) {
-      const now = new Date();
-      const expiresAt = new Date(currentUser.expiresAt);
-      if (expiresAt > now) {
+    const loadUser = async () => {
+      const currentUser = await getCurrentUserAsync();
+      if (!currentUser) {
+        router.push('/login');
+        return;
+      }
+      const isTestUser = currentUser.email?.toLowerCase() === 'test@siparis-sistemi.com';
+      if (currentUser.plan !== 'trial' && !isTestUser) {
         router.push('/dashboard');
         return;
       }
-    }
-    
-    setUser(currentUser);
+      setUser(currentUser);
+    };
+    loadUser();
+  }, [router]);
+
+  useEffect(() => {
+    if (user?.invoiceTaxNo) setInvoiceTaxNo(user.invoiceTaxNo);
+    if (user?.invoiceAddress) setInvoiceAddress(user.invoiceAddress);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
 
     // Fetch price from API (optional override)
     fetch('/api/settings/price')
@@ -60,16 +68,31 @@ export default function PaymentPage() {
         }
       })
       .catch(() => {});
-  }, [router]);
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreedHizmet || !agreedKvkk || !agreedIade) {
+      setAgreementError('Ödeme yapabilmek için tüm sözleşmeleri kabul etmeniz gerekmektedir.');
+      return;
+    }
+    setAgreementError('');
+    const taxNo = (user?.invoiceTaxNo || invoiceTaxNo).trim();
+    const address = (user?.invoiceAddress || invoiceAddress).trim();
     setIsLoading(true);
     setError('');
 
     if (!user) return;
 
     try {
+      // Fatura bilgileri isteğe bağlı - varsa kaydet
+      if ((taxNo || address) && (!user.invoiceTaxNo || !user.invoiceAddress)) {
+        await fetch('/api/user/update-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, invoiceTaxNo: taxNo || undefined, invoiceAddress: address || undefined }),
+        });
+      }
       // Toplam = ara toplam + KDV (KDV dahil ödenecek tutar)
       const baseAmount = selectedPlan === 'yearly' ? pricesFromApi.yearly : pricesFromApi.monthly;
       const totalAmount = Math.round(baseAmount * (1 + kdvRate / 100));
@@ -155,7 +178,9 @@ export default function PaymentPage() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Ödeme</h1>
           <p className="text-gray-600">
-            7 günlük deneme süreniz doldu. Devam etmek için bir plan seçin.
+            {user.expiresAt && new Date(user.expiresAt) > new Date()
+              ? '7 günlük denemeniz devam ediyor. İsterseniz şimdi ödeme yaparak aboneliğe geçebilirsiniz.'
+              : '7 günlük deneme süreniz doldu. Devam etmek için bir plan seçin.'}
           </p>
         </div>
 
@@ -219,6 +244,41 @@ export default function PaymentPage() {
             <p className="text-red-800 text-sm">{error}</p>
           </div>
         )}
+
+        {/* Fatura Bilgileri - isteğe bağlı */}
+        <div className="mb-6 p-4 rounded-xl border border-gray-200 bg-gray-50/50">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Fatura Bilgileri (isteğe bağlı)</h3>
+          <p className="text-xs text-gray-500 mb-4">İsim üzerine de fatura kesilebilir. Vergi no veya adres bilgisi vermek isterseniz doldurabilirsiniz.</p>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600"><span className="text-green-600">✔</span> Ad soyad: <strong>{user.name || '—'}</strong></p>
+              <p className="text-sm text-gray-600"><span className="text-green-600">✔</span> Mail: <strong>{user.email || '—'}</strong></p>
+              <div>
+                <label htmlFor="payment-invoice-tax" className="block text-xs font-medium text-gray-600 mb-1">Vergi no / TC no</label>
+                <input
+                  type="text"
+                  id="payment-invoice-tax"
+                  value={invoiceTaxNo}
+                  onChange={(e) => setInvoiceTaxNo(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                  placeholder="10 veya 11 haneli"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  style={{ borderColor: '#AF948F' }}
+                  maxLength={11}
+                />
+              </div>
+              <div>
+                <label htmlFor="payment-invoice-address" className="block text-xs font-medium text-gray-600 mb-1">Adres</label>
+                <input
+                  type="text"
+                  id="payment-invoice-address"
+                  value={invoiceAddress}
+                  onChange={(e) => setInvoiceAddress(e.target.value)}
+                  placeholder="Fatura adresi"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  style={{ borderColor: '#AF948F' }}
+                />
+              </div>
+            </div>
+          </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -309,7 +369,21 @@ export default function PaymentPage() {
             />
           </div>
 
-          <div className="pt-4 border-t space-y-2">
+          <div className="pt-4 border-t space-y-4">
+            {/* Sözleşme onayları - tümü işaretlenmeden ödeme yapılamaz */}
+            <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/50">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Sözleşmeler</h3>
+              <AgreementCheckboxes
+                items={[
+                  { id: 'hizmet', label: 'Hizmet Sözleşmesini', href: '/hizmet-sozlesmesi', checked: agreedHizmet, onChange: setAgreedHizmet },
+                  { id: 'kvkk', label: 'KVKK Aydınlatma Metnini', href: '/kvkk', checked: agreedKvkk, onChange: setAgreedKvkk },
+                  { id: 'iade', label: 'İade ve İptal Politikasını', href: '/iade-iptal', checked: agreedIade, onChange: setAgreedIade },
+                ]}
+                error={agreementError}
+              />
+            </div>
+
+            <div className="space-y-2">
             <div className="flex items-center justify-between text-gray-600">
               <span>Ara toplam:</span>
               <span>₺{baseAmount.toLocaleString('tr-TR')}</span>
@@ -327,12 +401,15 @@ export default function PaymentPage() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !agreedHizmet || !agreedKvkk || !agreedIade}
               className="w-full py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#FB6602', color: '#FFFFFF' }}
             >
               {isLoading ? 'İşleniyor...' : 'Ödemeyi Tamamla'}
             </button>
+
+            <PaymentTrustBadges />
+            </div>
           </div>
         </form>
       </div>

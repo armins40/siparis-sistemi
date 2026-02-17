@@ -5,6 +5,24 @@ import { getTheme } from '@/lib/themes';
 import { getAllCategories } from '@/lib/categories';
 import { is18PlusProduct } from '@/lib/age-restricted';
 import type { Product, Store } from '@/lib/types';
+import type { DayKey } from '@/lib/types';
+
+/** Türkiye saatine göre mağazanın şu an açık olup olmadığını kontrol eder. */
+function isWithinOpeningHours(store: Store | null): boolean {
+  if (!store?.openingHours || Object.keys(store.openingHours).length === 0) return true;
+  const now = new Date();
+  const turkeyTime = now.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour12: false }); // HH:mm:ss
+  const [h, m] = turkeyTime.split(':').map(Number);
+  const currentMinutes = h * 60 + m;
+  const dayOfWeek = now.toLocaleDateString('en-US', { timeZone: 'Europe/Istanbul', weekday: 'short' }).toLowerCase().slice(0, 3) as DayKey;
+  const todayHours = store.openingHours[dayOfWeek];
+  if (!todayHours || todayHours === null) return false; // Bugün kapalı
+  const [openH, openM] = (todayHours.open || '00:00').split(':').map(Number);
+  const [closeH, closeM] = (todayHours.close || '23:59').split(':').map(Number);
+  const openMinutes = openH * 60 + openM;
+  const closeMinutes = closeH * 60 + closeM;
+  return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+}
 
 interface MenuPageProps {
   params: Promise<{ slug?: string }>;
@@ -32,6 +50,13 @@ export default function MenuPage({ params }: MenuPageProps) {
   const [storeNotFound, setStoreNotFound] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [ageDeclined, setAgeDeclined] = useState(false);
+  const [, setTick] = useState(0);
+
+  // Çalışma saati kontrolü için her dakika yeniden hesapla
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     // Validate slug
@@ -808,15 +833,15 @@ export default function MenuPage({ params }: MenuPageProps) {
             </div>
             <button
               onClick={openOrderModal}
-              disabled={!store?.whatsapp || store.whatsapp.trim() === ''}
+              disabled={!store?.whatsapp || store.whatsapp.trim() === '' || !isWithinOpeningHours(store)}
               className="px-6 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               style={{
-                backgroundColor: (store?.whatsapp && store.whatsapp.trim() !== '') ? theme.primary : theme.text,
+                backgroundColor: (store?.whatsapp && store.whatsapp.trim() !== '' && isWithinOpeningHours(store)) ? theme.primary : theme.text,
                 color: '#ffffff',
               }}
             >
               <span>📱</span>
-              <span>WhatsApp ile Sipariş Ver</span>
+              <span>{isWithinOpeningHours(store) ? 'WhatsApp ile Sipariş Ver' : 'Çalışma saatleri dışında'}</span>
             </button>
           </div>
         </div>

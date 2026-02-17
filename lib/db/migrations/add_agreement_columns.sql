@@ -1,0 +1,6 @@
+-- Sözleşme onay alanları (kayıt formu)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS hizmet_sozlesmesi_onay BOOLEAN;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS kvkk_onay BOOLEAN;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS iade_onay BOOLEAN;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onay_tarihi TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ip_adresi TEXT;
